@@ -96,3 +96,36 @@ class VideoConfig:
             ),
             proxy=pick("proxy", str, "") or None,
         )
+
+
+@dataclass
+class PreviewConfig:
+    """预览采样的配置。"""
+
+    mosaic_block: int = 15
+    preview_generation_timeout: float = 5.0
+    preview_gif_width: int = 480
+    preview_gif_fps: int = 10
+
+    @classmethod
+    def from_mapping(cls, mapping: dict | None = None) -> "PreviewConfig":
+        """从 AstrBot 配置映射构造，非法值回退默认值。"""
+        source = mapping or {}
+
+        def pick(key: str, cast, default):
+            value = source.get(key, default)
+            if value in (None, ""):
+                return default
+            try:
+                return cast(value)
+            except (TypeError, ValueError):
+                return default
+
+        return cls(
+            mosaic_block=pick("mosaic_block", int, cls.mosaic_block),
+            preview_generation_timeout=pick(
+                "preview_generation_timeout", float, cls.preview_generation_timeout
+            ),
+            preview_gif_width=pick("preview_gif_width", int, cls.preview_gif_width),
+            preview_gif_fps=pick("preview_gif_fps", int, cls.preview_gif_fps),
+        )

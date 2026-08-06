@@ -57,31 +57,51 @@ class VideoService:
             cached = self.cache.get_asset(item.video_id, ASSET_ORIGINAL)
             if cached:
                 return self._build(item, cached, cached=True, refreshes=0)
-            output_path = os.path.join(
-                self.video_dir, f"{item.video_id}_{uuid.uuid4().hex[:8]}.mp4"
-            )
-            delay = self.config.video_source_refresh_delay
-            source = await video_source.fetch_matching_video_source(
-                self.http_client,
-                item.page_url,
-                item.source_id,
-                max_refreshes=self.config.video_source_max_refreshes,
-                proxy=self.config.proxy,
-                retry_delay_min=delay,
-                retry_delay_max=delay,
-            )
-            probe = await video_source.download_video_source(
-                self.http_client,
-                source,
-                item.page_url,
-                output_path,
-                timeout=self.config.video_download_timeout,
-                proxy=self.config.proxy,
-            )
-            self.cache.replace(item.video_id, {ASSET_ORIGINAL: output_path})
+            path, probe, refreshes = await self._download_original(item)
             return self._build(
-                item, output_path, cached=False, refreshes=source.refreshes, probe=probe
+                item, path, cached=False, refreshes=refreshes, probe=probe
             )
+
+    async def ensure_original_path(self, item) -> str | None:
+        """确保原片就绪并返回路径；缓存命中或下载成功返回 path，失败返回 None。
+
+        不加锁，供 PreviewService 等已持有 video_id 锁的调用方复用，
+        避免与自身 prepare 的锁重入。
+        """
+        cached = self.cache.get_asset(item.video_id, ASSET_ORIGINAL)
+        if cached:
+            return cached
+        try:
+            path, _, _ = await self._download_original(item)
+            return path
+        except (ValueError, RuntimeError):
+            return None
+
+    async def _download_original(self, item):
+        """校验下载原片并写缓存；返回 (path, probe, refreshes)。不加锁。"""
+        output_path = os.path.join(
+            self.video_dir, f"{item.video_id}_{uuid.uuid4().hex[:8]}.mp4"
+        )
+        delay = self.config.video_source_refresh_delay
+        source = await video_source.fetch_matching_video_source(
+            self.http_client,
+            item.page_url,
+            item.source_id,
+            max_refreshes=self.config.video_source_max_refreshes,
+            proxy=self.config.proxy,
+            retry_delay_min=delay,
+            retry_delay_max=delay,
+        )
+        probe = await video_source.download_video_source(
+            self.http_client,
+            source,
+            item.page_url,
+            output_path,
+            timeout=self.config.video_download_timeout,
+            proxy=self.config.proxy,
+        )
+        self.cache.replace(item.video_id, {ASSET_ORIGINAL: output_path})
+        return output_path, probe, source.refreshes
 
     def _resolve(self, video_id, result_id, index):
         """按 video_id 或 (result_id, index) 定位 VideoItem。"""

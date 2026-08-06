@@ -1,6 +1,7 @@
 """AstrBot 插件入口：注册 LLM Tool 与管理命令，装配 core 服务。
 
-阶段 1-3：91tool_query、91tool_video_info（纯本地）、91tool_prepare_video（进详情页）。
+阶段 1-4：91tool_query、91tool_video_info（纯本地）、91tool_prepare_video（进详情页）、
+91tool_prepare_preview（复用原片采样，不进详情页）。
 """
 from __future__ import annotations
 
@@ -13,14 +14,16 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools
 
-from .core.config import QueryConfig, VideoConfig
+from .core.config import PreviewConfig, QueryConfig, VideoConfig
 from .core.cookie_store import PersistentCookieJar
 from .core.list_fetcher import HttpListFetcher
 from .core.media_cache import MediaCache
+from .core.preview_service import PreviewService
 from .core.query_service import QueryService
 from .core.result_store import ResultStore
 from .core.video_registry import VideoRegistry
 from .core.video_service import VideoService
+from .tools import prepare_preview as prepare_preview_tool
 from .tools import prepare_video as prepare_video_tool
 from .tools import query as query_tool
 from .tools import video_info as video_info_tool
@@ -38,6 +41,7 @@ class PluginStar(Star):
         os.makedirs(self.video_dir, exist_ok=True)
         self.query_config = QueryConfig.from_mapping(config)
         self.video_config = VideoConfig.from_mapping(config)
+        self.preview_config = PreviewConfig.from_mapping(config)
         ttl_seconds = self.query_config.result_ttl_hours * 3600
         self.store = ResultStore(
             max_results=self.query_config.result_store_max,
@@ -50,6 +54,7 @@ class PluginStar(Star):
         self.http_client: Optional[aiohttp.ClientSession] = None
         self.query_service: Optional[QueryService] = None
         self.video_service: Optional[VideoService] = None
+        self.preview_service: Optional[PreviewService] = None
 
     async def initialize(self) -> None:
         """初始化 HTTP 客户端与各服务。"""
@@ -77,6 +82,13 @@ class PluginStar(Star):
             self.media_cache,
             self.query_service,
             self.video_config,
+            self.video_dir,
+        )
+        self.preview_service = PreviewService(
+            self.query_service,
+            self.video_service,
+            self.media_cache,
+            self.preview_config,
             self.video_dir,
         )
         logger.info("astrbot_plugin_91tool 初始化完成")
@@ -165,4 +177,35 @@ class PluginStar(Star):
             output = await prepare_video_tool.run_prepare_video(self.video_service, raw)
         except (ValueError, RuntimeError) as exc:
             return f"准备失败：{exc}"
+        return json.dumps(output, ensure_ascii=False)
+
+    @filter.llm_tool(name="91tool_prepare_preview")
+    async def prepare_preview(
+        self,
+        event: AstrMessageEvent,
+        video_id: str = "",
+        result_id: str = "",
+        index: int = 0,
+        format: str = "mp4",
+        mosaic: str = "",
+    ):
+        """基于原视频生成 MP4 或 GIF 预览并缓存，返回路径（不发送）。
+
+        Args:
+            video_id(string): 视频 ID，优先使用
+            result_id(string): 配合 index 使用
+            index(number): 在 result_id 结果中的 1-based 序号
+            format(string): mp4 或 gif，默认 mp4
+            mosaic(string): 是否打码，"true" 打码，留空不打码
+        """
+        raw = {
+            "video_id": video_id, "result_id": result_id, "index": index,
+            "format": format, "mosaic": mosaic,
+        }
+        try:
+            output = await prepare_preview_tool.run_prepare_preview(
+                self.preview_service, raw
+            )
+        except (ValueError, RuntimeError) as exc:
+            return f"预览失败：{exc}"
         return json.dumps(output, ensure_ascii=False)
