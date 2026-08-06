@@ -18,6 +18,7 @@ from .models import (
     parse_duration_text,
 )
 from .result_store import ResultStore
+from .video_registry import VideoRegistry
 
 
 class ListFetcher(Protocol):
@@ -40,18 +41,20 @@ def stable_video_id(source_id: str, viewkey: str, page_url: str) -> str:
 
 
 class QueryService:
-    """查询与筛选的纯业务编排，依赖可注入的 fetcher、store 与时钟。"""
+    """查询与筛选的纯业务编排，依赖可注入的 fetcher、store、registry 与时钟。"""
 
     def __init__(
         self,
         fetcher: ListFetcher,
         config: QueryConfig,
         store: ResultStore,
+        registry: VideoRegistry | None = None,
         now: Callable[[], float] | None = None,
     ):
         self.fetcher = fetcher
         self.config = config
         self.store = store
+        self.registry = registry
         self._now = now or time.time
 
     async def query(
@@ -69,7 +72,8 @@ class QueryService:
         """执行一次查询，返回带 result_id 的结构化结果。
 
         result_id 命中时直接返回已有快照，用于 AI 复用同一结果；
-        否则抓取指定页、本地筛选、按 page_size 截断、登记新 result_id。
+        否则抓取指定页、本地筛选、按 page_size 截断、登记新 result_id，
+        并把条目登记进 registry（若注入）供 video_id 反查。
         """
         category = category or self.config.default_category
         keyword = (keyword or "").strip()
@@ -114,6 +118,9 @@ class QueryService:
             created_at=self._now(),
         )
         self.store.put(result)
+        if self.registry is not None:
+            for item in items:
+                self.registry.put(item)
         return result
 
     def find_item(self, result_id: str, index: int) -> VideoItem | None:
@@ -127,6 +134,12 @@ class QueryService:
         """按 (result_id, index) 取稳定 video_id。"""
         item = self.find_item(result_id, index)
         return item.video_id if item else None
+
+    def find_by_video_id(self, video_id: str) -> VideoItem | None:
+        """按稳定 video_id 取条目，跨 result；未注入 registry 时返回 None。"""
+        if self.registry is None:
+            return None
+        return self.registry.get(video_id)
 
     def _record_to_item(self, record: VideoRecord, category: str) -> VideoItem:
         """把抓取层的 VideoRecord 转为面向 AI 的 VideoItem。"""

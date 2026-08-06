@@ -1,6 +1,6 @@
 """AstrBot 插件入口：注册 LLM Tool 与管理命令，装配 core 服务。
 
-阶段 1 仅注册 91tool_query；后续阶段在此追加其余 tool 与媒体发送策略。
+阶段 1-2：注册 91tool_query 与 91tool_video_info（后者纯本地，不进详情页）。
 """
 from __future__ import annotations
 
@@ -18,7 +18,9 @@ from .core.cookie_store import PersistentCookieJar
 from .core.list_fetcher import HttpListFetcher
 from .core.query_service import QueryService
 from .core.result_store import ResultStore
+from .core.video_registry import VideoRegistry
 from .tools import query as query_tool
+from .tools import video_info as video_info_tool
 
 
 class PluginStar(Star):
@@ -30,10 +32,12 @@ class PluginStar(Star):
         data_dir = StarTools.get_data_dir("astrbot_plugin_91tool")
         self.cookie_path = os.path.join(str(data_dir), "cookies.json")
         self.query_config = QueryConfig.from_mapping(config)
+        ttl_seconds = self.query_config.result_ttl_hours * 3600
         self.store = ResultStore(
             max_results=self.query_config.result_store_max,
-            ttl_seconds=self.query_config.result_ttl_hours * 3600,
+            ttl_seconds=ttl_seconds,
         )
+        self.registry = VideoRegistry(max_entries=500, ttl_seconds=ttl_seconds)
         self.http_client: Optional[aiohttp.ClientSession] = None
         self.query_service: Optional[QueryService] = None
 
@@ -55,7 +59,9 @@ class PluginStar(Star):
             cookie_jar=cookie_jar,
         )
         fetcher = HttpListFetcher(self.http_client, self.query_config)
-        self.query_service = QueryService(fetcher, self.query_config, self.store)
+        self.query_service = QueryService(
+            fetcher, self.query_config, self.store, self.registry
+        )
         logger.info("astrbot_plugin_91tool 初始化完成")
 
     async def terminate(self) -> None:
@@ -90,17 +96,34 @@ class PluginStar(Star):
             result_id(string): 复用已有结果时传入其 result_id
         """
         raw = {
-            "category": category,
-            "keyword": keyword,
-            "page": page,
-            "page_size": page_size,
-            "min_duration": min_duration,
-            "max_duration": max_duration,
-            "hd": hd,
-            "result_id": result_id,
+            "category": category, "keyword": keyword, "page": page,
+            "page_size": page_size, "min_duration": min_duration,
+            "max_duration": max_duration, "hd": hd, "result_id": result_id,
         }
         try:
             output = await query_tool.run_query(self.query_service, raw)
         except (ValueError, RuntimeError) as exc:
             return f"查询失败：{exc}"
+        return json.dumps(output, ensure_ascii=False)
+
+    @filter.llm_tool(name="91tool_video_info")
+    async def video_info(
+        self,
+        event: AstrMessageEvent,
+        video_id: str = "",
+        result_id: str = "",
+        index: int = 0,
+    ):
+        """查看单个视频的文字详情（不下载、不进详情页）。
+
+        Args:
+            video_id(string): 视频 ID，优先使用
+            result_id(string): 配合 index 使用，来自 91tool_query 返回
+            index(number): 在 result_id 结果中的 1-based 序号
+        """
+        raw = {"video_id": video_id, "result_id": result_id, "index": index}
+        try:
+            output = await video_info_tool.run_video_info(self.query_service, raw)
+        except ValueError as exc:
+            return f"参数错误：{exc}"
         return json.dumps(output, ensure_ascii=False)

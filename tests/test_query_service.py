@@ -126,3 +126,19 @@ async def test_query_rejects_negative_page_size(clock, fetcher_factory):
     service, _ = _build(fetcher_factory(), clock)
     with pytest.raises(ValueError):
         await service.query(page_size=-1)
+
+
+async def test_query_registers_items_to_registry(clock, make_rec, fetcher_factory):
+    from astrbot_plugin_91tool.core.video_registry import VideoRegistry
+
+    fetcher = fetcher_factory(records=[make_rec(source_id="1"), make_rec(source_id="2")])
+    store = ResultStore(max_results=10, ttl_seconds=3600, now=clock)
+    registry = VideoRegistry(max_entries=10, ttl_seconds=3600, now=clock)
+    service = QueryService(fetcher, QueryConfig(), store, registry, now=clock)
+
+    await service.query()
+
+    assert registry.get("1") is not None
+    assert registry.get("2") is not None
+    assert service.find_by_video_id("1") is not None
+    assert service.find_by_video_id("missing") is None
