@@ -62,6 +62,7 @@ def _item_dict(item) -> dict[str, Any]:
         "duration_text": item.duration_text,
         "duration_sec": item.duration_sec,
         "hd": item.hd,
+        "page_url": item.page_url,
     }
 
 

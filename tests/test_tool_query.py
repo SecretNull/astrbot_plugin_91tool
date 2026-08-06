@@ -55,6 +55,9 @@ async def test_run_query_end_to_end(clock, make_rec, fetcher_factory):
     assert output["items"][0]["hd"] is True
     assert output["items"][0]["duration_sec"] == 300.0
     assert output["items"][0]["index"] == 1
+    assert output["items"][0]["page_url"].startswith(
+        "https://www.91porn.com/view_video.php"
+    )
 
 
 async def test_run_query_applies_filter(clock, make_rec, fetcher_factory):
