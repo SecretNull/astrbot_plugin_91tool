@@ -129,3 +129,36 @@ class PreviewConfig:
             preview_gif_width=pick("preview_gif_width", int, cls.preview_gif_width),
             preview_gif_fps=pick("preview_gif_fps", int, cls.preview_gif_fps),
         )
+
+
+@dataclass
+class RenderConfig:
+    """长图渲染的配置。"""
+
+    longimage_width: int = 720
+    cover_max_height: int = 380
+    mosaic_block: int = 15
+    font_regular: str = ""
+    proxy: str | None = None
+
+    @classmethod
+    def from_mapping(cls, mapping: dict | None = None) -> "RenderConfig":
+        """从 AstrBot 配置映射构造，非法值回退默认值。"""
+        source = mapping or {}
+
+        def pick(key: str, cast, default):
+            value = source.get(key, default)
+            if value in (None, ""):
+                return default
+            try:
+                return cast(value)
+            except (TypeError, ValueError):
+                return default
+
+        return cls(
+            longimage_width=pick("longimage_width", int, cls.longimage_width),
+            cover_max_height=pick("cover_max_height", int, cls.cover_max_height),
+            mosaic_block=pick("mosaic_block", int, cls.mosaic_block),
+            font_regular=pick("font_regular", str, ""),
+            proxy=pick("proxy", str, "") or None,
+        )

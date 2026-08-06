@@ -1,7 +1,6 @@
 """AstrBot 插件入口：注册 LLM Tool 与管理命令，装配 core 服务。
 
-阶段 1-4：91tool_query、91tool_video_info（纯本地）、91tool_prepare_video（进详情页）、
-91tool_prepare_preview（复用原片采样，不进详情页）。
+阶段 1-5：query、video_info、prepare_video、prepare_preview、render_list。
 """
 from __future__ import annotations
 
@@ -14,18 +13,20 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools
 
-from .core.config import PreviewConfig, QueryConfig, VideoConfig
+from .core.config import PreviewConfig, QueryConfig, RenderConfig, VideoConfig
 from .core.cookie_store import PersistentCookieJar
 from .core.list_fetcher import HttpListFetcher
 from .core.media_cache import MediaCache
 from .core.preview_service import PreviewService
 from .core.query_service import QueryService
+from .core.render_service import RenderService
 from .core.result_store import ResultStore
 from .core.video_registry import VideoRegistry
 from .core.video_service import VideoService
 from .tools import prepare_preview as prepare_preview_tool
 from .tools import prepare_video as prepare_video_tool
 from .tools import query as query_tool
+from .tools import render_list as render_list_tool
 from .tools import video_info as video_info_tool
 
 
@@ -42,6 +43,7 @@ class PluginStar(Star):
         self.query_config = QueryConfig.from_mapping(config)
         self.video_config = VideoConfig.from_mapping(config)
         self.preview_config = PreviewConfig.from_mapping(config)
+        self.render_config = RenderConfig.from_mapping(config)
         ttl_seconds = self.query_config.result_ttl_hours * 3600
         self.store = ResultStore(
             max_results=self.query_config.result_store_max,
@@ -55,6 +57,7 @@ class PluginStar(Star):
         self.query_service: Optional[QueryService] = None
         self.video_service: Optional[VideoService] = None
         self.preview_service: Optional[PreviewService] = None
+        self.render_service: Optional[RenderService] = None
 
     async def initialize(self) -> None:
         """初始化 HTTP 客户端与各服务。"""
@@ -90,6 +93,9 @@ class PluginStar(Star):
             self.media_cache,
             self.preview_config,
             self.video_dir,
+        )
+        self.render_service = RenderService(
+            self.query_service, self.http_client, self.render_config, self.video_dir
         )
         logger.info("astrbot_plugin_91tool 初始化完成")
 
@@ -208,4 +214,31 @@ class PluginStar(Star):
             )
         except (ValueError, RuntimeError) as exc:
             return f"预览失败：{exc}"
+        return json.dumps(output, ensure_ascii=False)
+
+    @filter.llm_tool(name="91tool_render_list")
+    async def render_list(
+        self,
+        event: AstrMessageEvent,
+        result_id: str = "",
+        indices: str = "",
+        video_ids: str = "",
+        mosaic: str = "",
+    ):
+        """把查询结果或选定条目渲染成单列长图，返回路径（不发送）。
+
+        Args:
+            result_id(string): 来自 91tool_query 的结果 ID
+            indices(string): 要渲染的 1-based 序号，逗号分隔如 "1,3,5"；留空渲染全部
+            video_ids(string): 直接按 video_id 渲染，逗号分隔
+            mosaic(string): "true" 打码，"false" 无和谐，留空用默认(打码)
+        """
+        raw = {
+            "result_id": result_id, "indices": indices,
+            "video_ids": video_ids, "mosaic": mosaic,
+        }
+        try:
+            output = await render_list_tool.run_render_list(self.render_service, raw)
+        except (ValueError, RuntimeError) as exc:
+            return f"渲染失败：{exc}"
         return json.dumps(output, ensure_ascii=False)
