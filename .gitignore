@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+*.json.bak
+# 插件运行期数据（本地缓存、Cookie、临时媒体）
+data/
+temp/
+cookies.json

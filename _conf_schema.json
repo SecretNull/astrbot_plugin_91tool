@@ -1,0 +1,115 @@
+{
+  "91porn_category": {
+    "description": "默认爬取分类",
+    "type": "string",
+    "default": "rf",
+    "options": ["rf", "hot", "top", "ori", "tf", "mf", "md", "hd", "long", "longer"],
+    "hint": "rf加精 hot最热 top本月最热 ori原创 tf本月收藏 mf收藏最多 md本月讨论 hd高清 long≥10分钟 longer≥20分钟"
+  },
+  "91porn_user_agent": {
+    "description": "User-Agent",
+    "type": "string",
+    "default": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  },
+  "mosaic_block": {
+    "description": "马赛克缩放比",
+    "type": "int",
+    "default": 15,
+    "hint": "先把封面缩小到 1/mosaic_block 再放大做马赛克；<=1 时不打码(用原图)，>1 时数值即缩放比(如15=缩到1/15)"
+  },
+  "longimage_width": {
+    "description": "长图宽度(像素)",
+    "type": "int",
+    "default": 720
+  },
+  "cover_max_height": {
+    "description": "单张封面最大高度(像素)",
+    "type": "int",
+    "default": 380,
+    "hint": "控制单条高度与长图总长"
+  },
+  "request_delay_min": {
+    "description": "抓取请求最小间隔(秒)",
+    "type": "float",
+    "default": 1.0,
+    "hint": "每次列表/搜索抓取前的随机等待下限，避免被站点限流"
+  },
+  "request_delay_max": {
+    "description": "抓取请求最大间隔(秒)",
+    "type": "float",
+    "default": 1.5
+  },
+  "timeout": {
+    "description": "HTTP 请求超时(秒)",
+    "type": "int",
+    "default": 30
+  },
+  "video_source_max_refreshes": {
+    "description": "视频源 ID 不匹配时最大刷新次数",
+    "type": "int",
+    "default": 3,
+    "hint": "不包含首次详情页请求；3 表示最多请求详情页 4 次，超过后报错"
+  },
+  "video_source_refresh_delay": {
+    "description": "视频源 ID 错误时刷新间隔(秒)",
+    "type": "float",
+    "default": 3.0
+  },
+  "video_download_timeout": {
+    "description": "完整视频下载超时(秒)",
+    "type": "float",
+    "default": 1800.0
+  },
+  "video_cache_retention_hours": {
+    "description": "视频缓存最长保留时间(小时)",
+    "type": "float",
+    "default": 24.0,
+    "hint": "同一视频切换时会释放上一组原片和预览；其他缓存超过此时间后由后台清理"
+  },
+  "preview_generation_timeout": {
+    "description": "预览生成超时(秒)",
+    "type": "float",
+    "default": 5.0,
+    "hint": "单次 FFmpeg 生成 MP4 或 GIF 的最长运行时间"
+  },
+  "preview_gif_width": {
+    "description": "GIF 预览最大宽度(像素)",
+    "type": "int",
+    "default": 480
+  },
+  "preview_gif_fps": {
+    "description": "GIF 预览帧率",
+    "type": "int",
+    "default": 10
+  },
+  "cookie_bootstrap_max_refreshes": {
+    "description": "首次无 Cookie 请求后的最大刷新次数",
+    "type": "int",
+    "default": 3,
+    "hint": "分类和搜索共用；首次响应只用于取得 Cookie，不作为结果"
+  },
+  "cookie_bootstrap_delay": {
+    "description": "首次取得 Cookie 后的刷新间隔(秒)",
+    "type": "float",
+    "default": 3.0,
+    "hint": "分类纠正与搜索 Cookie 初始化共用"
+  },
+  "result_store_max": {
+    "description": "内存中保留的最近查询结果数",
+    "type": "int",
+    "default": 100,
+    "hint": "result_id → 结构化结果 的容量上限，超出按最旧淘汰"
+  },
+  "result_ttl_hours": {
+    "description": "查询结果在内存中的保留时间(小时)",
+    "type": "float",
+    "default": 24.0,
+    "hint": "超过后 result_id 失效，需要重新查询"
+  },
+  "proxy": {
+    "description": "HTTP/HTTPS 代理地址",
+    "type": "string",
+    "default": "",
+    "hint": "如 http://127.0.0.1:7890；留空不使用代理"
+  }
+}

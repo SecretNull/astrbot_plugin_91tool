@@ -1,0 +1,6 @@
+name: astrbot_plugin_91tool
+display_name: 91Tool
+desc: 91 Tool-first 插件，通过 LLM Tools 提供结构化查询、可信视频校验、多格式预览与媒体发送
+version: v0.1.0
+author: secretnull
+repo: ""
