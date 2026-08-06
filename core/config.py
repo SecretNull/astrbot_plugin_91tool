@@ -55,3 +55,44 @@ class QueryConfig:
             result_store_max=pick("result_store_max", int, cls.result_store_max),
             result_ttl_hours=pick("result_ttl_hours", float, cls.result_ttl_hours),
         )
+
+
+@dataclass
+class VideoConfig:
+    """视频下载与媒体缓存的配置。"""
+
+    video_source_max_refreshes: int = 3
+    video_source_refresh_delay: float = 3.0
+    video_download_timeout: float = 1800.0
+    video_cache_retention_hours: float = 24.0
+    proxy: str | None = None
+
+    @classmethod
+    def from_mapping(cls, mapping: dict | None = None) -> "VideoConfig":
+        """从 AstrBot 配置映射构造，非法值回退默认值。"""
+        source = mapping or {}
+
+        def pick(key: str, cast, default):
+            value = source.get(key, default)
+            if value in (None, ""):
+                return default
+            try:
+                return cast(value)
+            except (TypeError, ValueError):
+                return default
+
+        return cls(
+            video_source_max_refreshes=pick(
+                "video_source_max_refreshes", int, cls.video_source_max_refreshes
+            ),
+            video_source_refresh_delay=pick(
+                "video_source_refresh_delay", float, cls.video_source_refresh_delay
+            ),
+            video_download_timeout=pick(
+                "video_download_timeout", float, cls.video_download_timeout
+            ),
+            video_cache_retention_hours=pick(
+                "video_cache_retention_hours", float, cls.video_cache_retention_hours
+            ),
+            proxy=pick("proxy", str, "") or None,
+        )
