@@ -357,16 +357,16 @@ class PluginStar(Star):
         if image_size > self.send_config.image_max_bytes:
             return (
                 f"长图 {image_size} 字节超过发送上限 {self.send_config.image_max_bytes}，"
-                "请减少 page_size 后重试"
+                "请减少条数后重试"
             )
 
-        components = [Comp.Image.fromFileSystem(render_out["image_path"])]
-        pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
-        pending.extend(components)
-        event.set_extra(LLM_TOOL_MEDIA_EXTRA, pending)
+        await self.context.send_message(
+            event.unified_msg_origin,
+            MessageChain(chain=[Comp.Image.fromFileSystem(render_out["image_path"])]),
+        )
         size_mb = image_size / (1024 * 1024)
         return (
-            f"已加入待发长图({render_out['item_count']} 条，{size_mb:g}MB，agent 结束后发出)。"
+            f"已发送长图({render_out['item_count']} 条，{size_mb:g}MB)。"
             f"result_id={query_out['result_id']}；用户要某条详情/链接时用 video_info。"
         )
 
@@ -395,12 +395,12 @@ class PluginStar(Star):
         plan = await send_media_tool.run_send_media(self.send_service, raw)
         if plan["action"] == "reject":
             return f"未发送：{plan['reason']}"
-        components = self._build_media_components(plan)
-        pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
-        pending.extend(components)
-        event.set_extra(LLM_TOOL_MEDIA_EXTRA, pending)
+        umo = event.unified_msg_origin
+        for component in self._build_media_components(plan):
+            await self.context.send_message(umo, MessageChain(chain=[component]))
         size_mb = plan["size_bytes"] / (1024 * 1024)
-        return f"已加入待发：{plan['asset']}（{plan['kind']}，{size_mb:g}MB，agent 结束后发出）"
+        suffix = "（压缩版）" if plan.get("compressed") else ""
+        return f"已发送 {plan['asset']}（{plan['kind']}，{size_mb:g}MB）{suffix}"
 
     @filter.llm_tool(name="91tool_cache_status")
     async def cache_status(self, event: AstrMessageEvent):
