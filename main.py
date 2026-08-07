@@ -1,12 +1,17 @@
 """AstrBot 插件入口：注册 LLM Tool 与管理命令，装配 core 服务。
 
-阶段 1-6：query、video_info、prepare_video、prepare_preview、render_list、
-send_media（唯一发包 tool，通过 on_agent_done 延迟发送）+ /91probe 探测命令。
+阶段 1-7 完整：
+  query / video_info / prepare_video / prepare_preview / render_list /
+  send_media(唯一发包，经 on_agent_done) / cache_status
+管理命令：/91probe 探测、/91tool_status 状态、/91tool_clear 清理、/91tool_help 帮助。
+后台清理循环定期回收过期 result / video_id / 媒体。
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+from contextlib import suppress
 from typing import Optional
 
 import aiohttp
@@ -28,6 +33,7 @@ from .core.result_store import ResultStore
 from .core.send_service import SendService
 from .core.video_registry import VideoRegistry
 from .core.video_service import VideoService
+from .tools import cache_status as cache_status_tool
 from .tools import prepare_preview as prepare_preview_tool
 from .tools import prepare_video as prepare_video_tool
 from .tools import query as query_tool
@@ -69,9 +75,10 @@ class PluginStar(Star):
         self.preview_service: Optional[PreviewService] = None
         self.render_service: Optional[RenderService] = None
         self.send_service: Optional[SendService] = None
+        self.cleanup_task: Optional[asyncio.Task] = None
 
     async def initialize(self) -> None:
-        """初始化 HTTP 客户端与各服务。"""
+        """初始化 HTTP 客户端、各服务与后台清理循环。"""
         timeout = aiohttp.ClientTimeout(total=self.query_config.timeout)
         headers = {
             "User-Agent": self.query_config.user_agent,
@@ -103,13 +110,32 @@ class PluginStar(Star):
             self.query_service, self.http_client, self.render_config, self.video_dir
         )
         self.send_service = SendService(self.media_cache, self.send_config)
+        self.cleanup_task = asyncio.create_task(self._cleanup_loop())
         logger.info("astrbot_plugin_91tool 初始化完成")
 
     async def terminate(self) -> None:
-        """关闭 HTTP 客户端。"""
+        """停止清理循环并关闭 HTTP 客户端。"""
+        if self.cleanup_task:
+            self.cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.cleanup_task
+            self.cleanup_task = None
         if self.http_client:
             await self.http_client.close()
         logger.info("astrbot_plugin_91tool 已关闭")
+
+    async def _cleanup_loop(self) -> None:
+        """每小时清理过期的查询结果、视频索引与媒体缓存。"""
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                self.store.evict_expired()
+                self.registry.evict_expired()
+                removed = self.media_cache.cleanup_expired()
+                if removed:
+                    logger.info("已清理 %d 个过期媒体文件", removed)
+            except Exception as exc:  # noqa: BLE001 后台任务不能因单次失败退出
+                logger.warning("清理循环出错：%s", exc)
 
     def _build_media_components(self, plan: dict) -> list:
         """按决策把待发文件构造成 astrbot 消息组件。"""
@@ -294,6 +320,14 @@ class PluginStar(Star):
         size_mb = plan["size_bytes"] / (1024 * 1024)
         return f"已加入待发：{plan['asset']}（{plan['kind']}，{size_mb:g}MB，agent 结束后发出）"
 
+    @filter.llm_tool(name="91tool_cache_status")
+    async def cache_status(self, event: AstrMessageEvent):
+        """查看查询结果、视频索引、媒体缓存的概况。"""
+        output = cache_status_tool.run_cache_status(
+            self.store, self.registry, self.media_cache
+        )
+        return json.dumps(output, ensure_ascii=False)
+
     # ---- 管理命令 ----
 
     def _probe_sender(self, event: AstrMessageEvent, kind: str):
@@ -336,3 +370,40 @@ class PluginStar(Star):
             )
             reports.append(report)
         yield event.plain_result(format_reports(reports))
+
+    @filter.command("91tool_status", alias={"91状态"})
+    async def status_command(self, event: AstrMessageEvent):
+        """查看缓存概况。"""
+        status = cache_status_tool.run_cache_status(
+            self.store, self.registry, self.media_cache
+        )
+        size_mb = status["total_size_bytes"] / (1024 * 1024)
+        text = (
+            f"查询结果：{status['results']} 条\n"
+            f"视频索引：{status['video_ids']} 个\n"
+            f"媒体缓存包：{status['media_bundles']} 个\n"
+            f"媒体总占用：{size_mb:g}MB"
+        )
+        yield event.plain_result(text)
+
+    @filter.command("91tool_clear", alias={"91清理"})
+    async def clear_command(self, event: AstrMessageEvent):
+        """清理过期的查询结果、视频索引与媒体缓存。"""
+        self.store.evict_expired()
+        self.registry.evict_expired()
+        removed = self.media_cache.cleanup_expired()
+        yield event.plain_result(f"已清理过期缓存，媒体文件 {removed} 个")
+
+    @filter.command("91tool_help", alias={"91帮助"})
+    async def help_command(self, event: AstrMessageEvent):
+        """查看可用命令与 AI 工具。"""
+        text = (
+            "91Tool 管理命令：\n"
+            "  /91probe [image|video|file]  探测发送通道与上限\n"
+            "  /91tool_status               查看缓存概况\n"
+            "  /91tool_clear                清理过期缓存\n"
+            "  /91tool_help                 显示本帮助\n\n"
+            "AI 可调用工具：91tool_query / video_info / prepare_video / "
+            "prepare_preview / render_list / send_media / cache_status"
+        )
+        yield event.plain_result(text)

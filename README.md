@@ -32,9 +32,9 @@ pytest -q
 
 - [x] 阶段 0：项目骨架
 - [x] 阶段 1：结构化查询服务 + `91tool_query`
-- [ ] 阶段 2：`91tool_video_info` 文字详情（纯本地，不进详情页）
-- [ ] 阶段 3：`91tool_prepare_video` 可信校验 + 下载原视频（进详情页）
-- [ ] 阶段 4：`91tool_prepare_preview` 预览采样（复用原片）
-- [ ] 阶段 5：`91tool_render_list` 长图渲染（选定条目，用列表封面）
-- [ ] 阶段 6：`91tool_send_media` 媒体发送策略（QQ 官方适配器）
-- [ ] 阶段 7：`91tool_cache_status` 缓存状态与管理命令
+- [x] 阶段 2：`91tool_video_info` 文字详情（纯本地，不进详情页）
+- [x] 阶段 3：`91tool_prepare_video` 可信校验 + 下载原视频（进详情页）
+- [x] 阶段 4：`91tool_prepare_preview` 预览采样（复用原片）
+- [x] 阶段 5：`91tool_render_list` 长图渲染（选定条目，用列表封面）
+- [x] 阶段 6：`91tool_send_media` 媒体发送策略（经 on_agent_done 发包，QQ/微信实测）
+- [x] 阶段 7：`91tool_cache_status` + 管理命令(/91probe /91tool_status /91tool_clear /91tool_help) + 后台清理循环
