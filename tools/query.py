@@ -82,6 +82,7 @@ def build_output(result) -> dict[str, Any]:
             "truncated": result.truncated,
         },
         "items": [_item_dict(item) for item in result.items],
+        "hint": "列表结果建议用 render_list 渲染长图并以 send_media 发送(图文更直观)，或直接用 list_image 一步发长图；不要逐条文字罗列",
     }
 
 

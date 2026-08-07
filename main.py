@@ -187,6 +187,9 @@ class PluginStar(Star):
     ):
         """按分类或关键词查询 91 视频，返回带 result_id 的结构化列表。
 
+        列表展示首选：拿到结果后用 91tool_list_image 一步发长图，或 render_list + send_media。
+        不要逐条文字罗列给用户。只有用户明确要"具体链接/某条详情"时才用文字或 video_info。
+
         Args:
             category(string): 分类代码 rf/hot/top/ori/tf/mf/md/hd/long/longer，留空用默认分类
             keyword(string): 搜索关键词，非空时按搜索结果返回
@@ -278,7 +281,9 @@ class PluginStar(Star):
         self, event: AstrMessageEvent,
         result_id: str = "", indices: str = "", video_ids: str = "", mosaic: str = "",
     ):
-        """把查询结果或选定条目渲染成单列长图，返回路径（不发送）。
+        """把查询结果或选定条目渲染成单列长图——列表发给用户的主要形式。
+
+        渲染后用 send_media(path=image_path) 发出。列表浏览也可直接用 list_image 一步完成。
 
         Args:
             result_id(string): 来自 91tool_query 的结果 ID
@@ -295,6 +300,70 @@ class PluginStar(Star):
         except (ValueError, RuntimeError) as exc:
             return f"渲染失败：{exc}"
         return json.dumps(output, ensure_ascii=False)
+
+    @filter.llm_tool(name="91tool_list_image")
+    async def list_image(
+        self,
+        event: AstrMessageEvent,
+        category: str = "",
+        keyword: str = "",
+        page: int = 1,
+        page_size: int = 0,
+        min_duration: float = 0,
+        max_duration: float = 0,
+        hd: str = "",
+        mosaic: str = "",
+    ):
+        """浏览分类/搜索，一步查询+渲染长图+发送(列表展示的首选方式)。
+
+        除非用户明确要"具体链接/某条详情"，列表浏览都用本工具发长图，不要文字罗列。
+        返回 result_id，用户后续要看某条详情/原片时用它定位。
+
+        Args:
+            category(string): 分类代码 rf/hot/top/ori/tf/mf/md/hd/long/longer
+            keyword(string): 搜索关键词，非空时按搜索结果
+            page(number): 页码，从 1 开始
+            page_size(number): 最多渲染条数，0 不限；条目多长图会过大被拒，建议 10~15
+            min_duration(number): 最小时长(秒)，0 不限
+            max_duration(number): 最大时长(秒)，0 不限
+            hd(string): HD 过滤，留空不限，"true" 仅 HD，"false" 仅非 HD
+            mosaic(string): 长图打码，"true"(默认)打码，"false" 无和谐
+        """
+        query_raw = {
+            "category": category, "keyword": keyword, "page": page,
+            "page_size": page_size, "min_duration": min_duration,
+            "max_duration": max_duration, "hd": hd,
+        }
+        try:
+            query_out = await query_tool.run_query(self.query_service, query_raw)
+        except (ValueError, RuntimeError) as exc:
+            return f"查询失败：{exc}"
+        if not query_out["items"]:
+            return "没有匹配的结果"
+
+        render_out = await render_list_tool.run_render_list(
+            self.render_service,
+            {"result_id": query_out["result_id"], "mosaic": mosaic or "true"},
+        )
+        if not render_out.get("ready"):
+            return f"长图渲染失败：{render_out.get('error')}"
+
+        image_size = os.path.getsize(render_out["image_path"])
+        if image_size > self.send_config.image_max_bytes:
+            return (
+                f"长图 {image_size} 字节超过发送上限 {self.send_config.image_max_bytes}，"
+                "请减少 page_size 后重试"
+            )
+
+        components = [Comp.Image.fromFileSystem(render_out["image_path"])]
+        pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
+        pending.extend(components)
+        event.set_extra(LLM_TOOL_MEDIA_EXTRA, pending)
+        size_mb = image_size / (1024 * 1024)
+        return (
+            f"已加入待发长图({render_out['item_count']} 条，{size_mb:g}MB，agent 结束后发出)。"
+            f"result_id={query_out['result_id']}；用户要某条详情/链接时用 video_info。"
+        )
 
     @filter.llm_tool(name="91tool_send_media")
     async def send_media(
