@@ -1,10 +1,10 @@
 {
   "91porn_category": {
-    "description": "默认爬取分类",
+    "description": "默认爬取分类(建议留空，由用户每次指定)",
     "type": "string",
     "default": "rf",
-    "options": ["rf", "hot", "top", "ori", "tf", "mf", "md", "hd", "long", "longer"],
-    "hint": "rf加精 hot最热 top本月最热 ori原创 tf本月收藏 mf收藏最多 md本月讨论 hd高清 long≥10分钟 longer≥20分钟"
+    "options": ["rf", "hot", "top", "monthly_top", "ori", "tf", "mf", "md", "hd", "long", "longer"],
+    "hint": "rf最近加精 hot最热 top本月最热 monthly_top每月最热 ori原创 tf本月收藏 mf收藏最多 md本月讨论 hd高清 long≥10分钟 longer≥20分钟"
   },
   "91porn_user_agent": {
     "description": "User-Agent",

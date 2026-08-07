@@ -37,7 +37,9 @@ class VideoRecord:
 
 
 def build_page_url(category: str, page: int) -> str:
-    """构造列表页 URL。viewtype 固定 basic（detailed 未登录为空，已验证）。"""
+    """构造列表页 URL。monthly_top 走 top 的 m=-1(每月最热)变体。"""
+    if category == "monthly_top":
+        return f"{BASE_URL}/v.php?category=top&m=-1&viewtype=basic&page={page}"
     return f"{BASE_URL}/v.php?category={category}&viewtype=basic&page={page}"
 
 
@@ -156,6 +158,8 @@ async def fetch_page(session: ClientSession, category: str, page: int,
     if category_refresh_delay < 0:
         raise ValueError("category_refresh_delay 不能小于 0")
     url = build_page_url(category, page)
+    # monthly_top 请求的是 top&m=-1，响应里 reported_category 仍是 top
+    expected_reported = "top" if category == "monthly_top" else category
     last_reported_category = "无法识别"
     for refreshes in range(max_category_refreshes + 1):
         request_has_cookie = has_access_cookie(session)
@@ -164,18 +168,18 @@ async def fetch_page(session: ClientSession, category: str, page: int,
                 return []
             html = await resp.text()
         reported_category = extract_reported_category(html)
-        if reported_category == category and request_has_cookie:
+        if reported_category == expected_reported and request_has_cookie:
             return parse_cards(html)
         last_reported_category = reported_category or "无法识别"
         if refreshes < max_category_refreshes:
             await asyncio.sleep(category_refresh_delay)
-    if last_reported_category == category:
+    if last_reported_category == expected_reported:
         raise CookieBootstrapError(
             f"刷新分类页 {max_category_refreshes} 次后仍未使用 CLIPSHARE Cookie"
         )
     raise CategoryMismatchError(
         f"刷新分类页 {max_category_refreshes} 次后响应分类仍不匹配："
-        f"期望 {category}，最后实际 {last_reported_category}"
+        f"期望 {expected_reported}，最后实际 {last_reported_category}"
     )
 
 

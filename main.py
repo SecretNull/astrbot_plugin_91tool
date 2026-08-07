@@ -194,7 +194,7 @@ class PluginStar(Star):
         不要逐条文字罗列给用户。只有用户明确要"具体链接/某条详情"时才用文字或 video_info。
 
         Args:
-            category(string): 分类 rf=加精 hot=最热 top=本月最热 ori=原创 tf=本月收藏 mf=收藏最多 md=本月讨论 hd=高清 long=≥10分钟 longer=≥20分钟，留空用默认分类
+            category(string): 分类 rf=最近加精 hot=最热 top=本月最热 monthly_top=每月最热 ori=原创 tf=本月收藏 mf=收藏最多 md=本月讨论 hd=高清 long=≥10分钟 longer=≥20分钟；用户没指定时先问要哪个分类，不要自作主张选默认，留空用默认分类
             keyword(string): 搜索关键词，非空时按搜索结果返回
             page(number): 页码，从 1 开始
             page_size(number): 最多返回条目数，0 表示不限
@@ -325,7 +325,7 @@ class PluginStar(Star):
         列表浏览都用本工具发长图，不要文字罗列。返回 result_id 供后续 video_info/prepare。
 
         Args:
-            category(string): 分类 rf=加精 hot=最热 top=本月最热 ori=原创 tf=本月收藏 mf=收藏最多 md=本月讨论 hd=高清 long=≥10分钟 longer=≥20分钟
+            category(string): 分类 rf=最近加精 hot=最热 top=本月最热 monthly_top=每月最热 ori=原创 tf=本月收藏 mf=收藏最多 md=本月讨论 hd=高清 long=≥10分钟 longer=≥20分钟；用户没指定时先问要哪个分类，不要自作主张选默认
             keyword(string): 搜索关键词，非空时按搜索结果
             page(number): 页码，从 1 开始
             min_duration(number): 最小时长(秒)，0 不限
