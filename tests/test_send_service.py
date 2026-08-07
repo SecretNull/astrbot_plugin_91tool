@@ -86,3 +86,27 @@ async def test_compress_returns_none_falls_back_reject(tmp_path):
         video_id="1001", asset="original", uncensored=True
     )
     assert decision.action == ACTION_REJECT
+
+
+async def test_resolve_send_path_mp4_treated_as_video(tmp_path):
+    cache = MediaCache(str(tmp_path), retention_hours=24)
+    mp4 = tmp_path / "123_preview_clean_abc.mp4"
+    mp4.write_bytes(b"x" * 100)
+
+    decision = await SendService(cache, SendConfig()).resolve_send(
+        path=str(mp4), uncensored=True
+    )
+    assert decision.action == ACTION_SEND
+    assert decision.kind == "video"
+    assert decision.asset == "preview_clean"
+
+
+async def test_resolve_send_path_jpg_treated_as_image(tmp_path):
+    cache = MediaCache(str(tmp_path), retention_hours=24)
+    jpg = tmp_path / "render_xyz.jpg"
+    jpg.write_bytes(b"x" * 100)
+
+    decision = await SendService(cache, SendConfig()).resolve_send(path=str(jpg))
+    assert decision.action == ACTION_SEND
+    assert decision.kind == "image"
+    assert decision.asset == "render_image"

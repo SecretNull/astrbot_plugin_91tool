@@ -26,6 +26,19 @@ _ASSET_TO_CACHE = {
 }
 
 
+def _infer_asset_from_path(path: str) -> str:
+    """path 模式下按文件名推断产物类型，决定发送通道与审核等级。"""
+    name = os.path.basename(path).lower()
+    for key in ("preview_mosaic", "preview_clean", "gif_mosaic", "gif_clean"):
+        if key in name:
+            return key
+    if "compressed" in name or name.endswith(".mp4"):
+        return "original"
+    if name.endswith(".gif"):
+        return "gif_clean"
+    return "render_image"
+
+
 class SendService:
     """按 video_id+asset 或 path 解析文件并决策；original 超上限时压缩补救。"""
 
@@ -102,7 +115,7 @@ class SendService:
     def _resolve_path(self, video_id, asset, path):
         """返回 (path, asset_name) 或错误字符串。"""
         if path:
-            return path, asset or "render_image"
+            return path, asset or _infer_asset_from_path(path)
         if video_id and asset:
             cache_asset = _ASSET_TO_CACHE.get(asset)
             if cache_asset is None:
