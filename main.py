@@ -311,7 +311,6 @@ class PluginStar(Star):
         category: str = "",
         keyword: str = "",
         page: int = 1,
-        page_size: int = 0,
         min_duration: float = 0,
         max_duration: float = 0,
         hd: str = "",
@@ -322,14 +321,13 @@ class PluginStar(Star):
         用户说"数字站"或"91"都指本数据源（如"看数字站热门"/"91热门"均调用本工具查 hot）。
         回复用户时一律用"数字站"指代，不要出现数字 91、完整站点地址或工具内部名。
 
-        除非用户明确要"具体链接/某条详情"，列表浏览都用本工具发长图，不要文字罗列。
-        返回 result_id，用户后续要看某条详情/原片时用它定位。
+        渲染整页全部条目(通常 20~30 条，长图一般 <2MB)。除非用户明确要"具体链接/某条详情"，
+        列表浏览都用本工具发长图，不要文字罗列。返回 result_id 供后续 video_info/prepare。
 
         Args:
             category(string): 分类代码 rf/hot/top/ori/tf/mf/md/hd/long/longer
             keyword(string): 搜索关键词，非空时按搜索结果
             page(number): 页码，从 1 开始
-            page_size(number): 最多渲染条数，0 不限；条目多长图会过大被拒，建议 10~15
             min_duration(number): 最小时长(秒)，0 不限
             max_duration(number): 最大时长(秒)，0 不限
             hd(string): HD 过滤，留空不限，"true" 仅 HD，"false" 仅非 HD
@@ -337,7 +335,7 @@ class PluginStar(Star):
         """
         query_raw = {
             "category": category, "keyword": keyword, "page": page,
-            "page_size": page_size, "min_duration": min_duration,
+            "min_duration": min_duration,
             "max_duration": max_duration, "hd": hd,
         }
         try:
