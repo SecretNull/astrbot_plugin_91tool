@@ -16,7 +16,7 @@ from typing import Awaitable, Callable, Sequence
 
 from PIL import Image
 
-DEFAULT_PROBE_SIZES_MB: tuple[int, ...] = (1, 5, 10, 20, 50, 100)
+DEFAULT_PROBE_SIZES_MB: tuple[int, ...] = (1, 3, 5, 8, 10, 15, 20, 30, 50)
 
 # JPEG 边长上限：4096 足以测出图片通道上限（再大平台也不收）
 _JPEG_MAX_SIDE = 4096

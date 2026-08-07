@@ -121,12 +121,19 @@ class PluginStar(Star):
         return [Comp.Video.fromFileSystem(path=path)]
 
     @filter.on_agent_done()
-    async def emit_pending_media(self, event: AstrMessageEvent, response):
-        """agent 结束时把 llm_tool 暂存的媒体作为最终回复发出。"""
+    async def emit_pending_media(self, event: AstrMessageEvent, *args, **kwargs):
+        """agent 结束时把 llm_tool 暂存的媒体作为最终回复发出。
+
+        astrbot 不同版本给 on_agent_done 传参个数不同，这里按 result_chain
+        属性定位 response，兼容多参数。
+        """
         pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
         if not pending:
             return
         event.set_extra(LLM_TOOL_MEDIA_EXTRA, [])
+        response = next((arg for arg in args if hasattr(arg, "result_chain")), None)
+        if response is None:
+            return
         response.result_chain = MessageChain(chain=pending, type="llm_result")
 
     # ---- LLM Tools ----
