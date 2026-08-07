@@ -143,3 +143,25 @@ async def test_compress_service_returns_none_when_over_target(tmp_path, monkeypa
     )
     assert path is None
     assert "仍超过" in reason
+
+
+async def test_compress_file_compresses_arbitrary_path(tmp_path, monkeypatch):
+    cache = MediaCache(str(tmp_path), retention_hours=24)
+    src = tmp_path / "any.mp4"
+    src.write_bytes(b"big")
+
+    async def fake_probe(path):
+        return video_source.VideoProbe(120.0, 1280, 720, "h264", "aac")
+
+    def fake_compress(src, out, duration, target_bytes, timeout=300.0):
+        Path(out).write_bytes(b"small")
+
+    monkeypatch.setattr(video_source, "probe_video", fake_probe)
+    monkeypatch.setattr(compress, "compress_video", fake_compress)
+
+    out, reason = await CompressService(cache, str(tmp_path)).compress_file(
+        str(src), target_bytes=5 * 1024 * 1024
+    )
+    assert out is not None
+    assert os.path.exists(out)
+    assert cache.get_asset("any", ASSET_ORIGINAL_COMPRESSED) is None  # 不写缓存

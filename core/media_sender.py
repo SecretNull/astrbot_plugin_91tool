@@ -117,7 +117,6 @@ def decide(
             as_file=as_file,
             reason=(
                 f"{kind} 文件 {size_bytes} 字节超过上限 {max_bytes} 字节"
-                "（compress/segment 接口预留）"
             ),
         )
 

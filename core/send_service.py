@@ -76,13 +76,19 @@ class SendService:
             decision.action == ACTION_REJECT
             and asset_name == "original"
             and decision.kind == "video"
-            and video_id
             and "超过上限" in decision.reason
             and self.compress is not None
         ):
-            compressed, comp_reason = await self.compress.compress_original(
-                video_id, self.config.video_max_bytes
-            )
+            if video_id:
+                compressed, comp_reason = await self.compress.compress_original(
+                    video_id, self.config.video_max_bytes
+                )
+            elif path:
+                compressed, comp_reason = await self.compress.compress_file(
+                    path, self.config.video_max_bytes
+                )
+            else:
+                compressed, comp_reason = None, "缺少 video_id/path，无法定位原片"
             if compressed and os.path.exists(compressed):
                 remedied = decide(
                     asset=asset_name,

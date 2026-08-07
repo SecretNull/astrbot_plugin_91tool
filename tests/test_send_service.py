@@ -14,7 +14,11 @@ class FakeCompress:
         self.calls = []
 
     async def compress_original(self, video_id, target_bytes):
-        self.calls.append((video_id, target_bytes))
+        self.calls.append(("original", video_id, target_bytes))
+        return self.return_value, "fake reason"
+
+    async def compress_file(self, path, target_bytes):
+        self.calls.append(("file", path, target_bytes))
         return self.return_value, "fake reason"
 
 
@@ -37,7 +41,7 @@ async def test_original_over_limit_compressed(tmp_path):
     assert decision.action == ACTION_SEND
     assert decision.compressed is True
     assert decision.path == str(comp_path)
-    assert compress.calls and compress.calls[0][0] == "1001"
+    assert compress.calls and compress.calls[0][0] == "original"
 
 
 async def test_original_over_limit_no_compress_service(tmp_path):
@@ -110,3 +114,38 @@ async def test_resolve_send_path_jpg_treated_as_image(tmp_path):
     assert decision.action == ACTION_SEND
     assert decision.kind == "image"
     assert decision.asset == "render_image"
+
+
+async def test_original_path_over_limit_uses_compress_file(tmp_path):
+    cache = MediaCache(str(tmp_path), retention_hours=24)
+    original = tmp_path / "123_abc.mp4"  # path 模式无 video_id
+    original.write_bytes(b"x" * (20 * 1024 * 1024))
+    comp_path = tmp_path / "comp.mp4"
+    comp_path.write_bytes(b"x" * (5 * 1024 * 1024))
+    compress = FakeCompress(return_value=str(comp_path))
+
+    decision = await SendService(cache, SendConfig(), compress).resolve_send(
+        path=str(original), uncensored=True
+    )
+    assert decision.action == ACTION_SEND
+    assert decision.compressed is True
+    assert decision.path == str(comp_path)
+    assert compress.calls and compress.calls[0][0] == "file"  # 走 compress_file
+
+
+async def test_original_path_overlong_falls_back_reject(tmp_path, monkeypatch):
+    cache = MediaCache(str(tmp_path), retention_hours=24)
+    original = tmp_path / "123_abc.mp4"
+    original.write_bytes(b"x" * (20 * 1024 * 1024))
+
+    class _Overlong:
+        async def compress_original(self, video_id, target_bytes):
+            return None, "不应走到这"
+        async def compress_file(self, path, target_bytes):
+            return None, "原片约 837 秒过长，压不到目标内"
+
+    decision = await SendService(cache, SendConfig(), _Overlong()).resolve_send(
+        path=str(original), uncensored=True
+    )
+    assert decision.action == ACTION_REJECT
+    assert "过长" in decision.reason
