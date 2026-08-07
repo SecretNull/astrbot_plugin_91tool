@@ -91,7 +91,7 @@ class PluginStar(Star):
         }
         cookie_jar = PersistentCookieJar(self.cookie_path)
         if cookie_jar.load_error:
-            logger.warning("91porn Cookie 恢复失败，将创建新会话")
+            logger.warning("Cookie 恢复失败，将创建新会话")
         self.http_client = aiohttp.ClientSession(
             timeout=timeout,
             headers=headers,
@@ -185,9 +185,12 @@ class PluginStar(Star):
         hd: str = "",
         result_id: str = "",
     ):
-        """按分类或关键词查询 91 视频，返回带 result_id 的结构化列表。
+        """按分类或关键词查询视频，返回带 result_id 的结构化列表。
 
-        列表展示首选：拿到结果后用 91tool_list_image 一步发长图，或 render_list + send_media。
+        数据源用户称为"数字站"——用户说"数字站热门/数字站某分类"即指本工具。
+        回复用户时用"数字站"指代，不要出现数字 91、完整站点地址或工具内部名。
+
+        列表展示首选：拿到结果后用 list_image 一步发长图，或 render_list + send_media。
         不要逐条文字罗列给用户。只有用户明确要"具体链接/某条详情"时才用文字或 video_info。
 
         Args:
@@ -220,7 +223,7 @@ class PluginStar(Star):
 
         Args:
             video_id(string): 视频 ID，优先使用
-            result_id(string): 配合 index 使用，来自 91tool_query 返回
+            result_id(string): 配合 index 使用，来自 query 返回
             index(number): 在 result_id 结果中的 1-based 序号
         """
         raw = {"video_id": video_id, "result_id": result_id, "index": index}
@@ -286,7 +289,7 @@ class PluginStar(Star):
         渲染后用 send_media(path=image_path) 发出。列表浏览也可直接用 list_image 一步完成。
 
         Args:
-            result_id(string): 来自 91tool_query 的结果 ID
+            result_id(string): 来自 query 的结果 ID
             indices(string): 要渲染的 1-based 序号，逗号分隔如 "1,3,5"；留空渲染全部
             video_ids(string): 直接按 video_id 渲染，逗号分隔
             mosaic(string): "true" 打码，"false" 无和谐，留空用默认(打码)
@@ -315,6 +318,9 @@ class PluginStar(Star):
         mosaic: str = "",
     ):
         """浏览分类/搜索，一步查询+渲染长图+发送(列表展示的首选方式)。
+
+        数据源用户称为"数字站"——用户说"看数字站热门/数字站某分类"即调用本工具(category=hot 等)。
+        回复用户时用"数字站"指代，不要出现数字 91、完整站点地址或工具内部名。
 
         除非用户明确要"具体链接/某条详情"，列表浏览都用本工具发长图，不要文字罗列。
         返回 result_id，用户后续要看某条详情/原片时用它定位。
@@ -374,7 +380,7 @@ class PluginStar(Star):
         """发送已准备的媒体到当前会话。
 
         默认只发打码版；用户明确要无和谐时传 uncensored=true。视频默认视频消息，
-        as_file=true 时以文件形式发（Comp.File，部分平台不支持，可先 /91probe 探测）。
+        as_file=true 时以文件形式发（文件通道，部分平台不支持）。
 
         Args:
             video_id(string): 视频 ID，配合 asset 定位产物
@@ -475,12 +481,12 @@ class PluginStar(Star):
     async def help_command(self, event: AstrMessageEvent):
         """查看可用命令与 AI 工具。"""
         text = (
-            "91Tool 管理命令：\n"
+            "本插件管理命令：\n"
             "  /91probe [image|video|file]  探测发送通道与上限\n"
             "  /91tool_status               查看缓存概况\n"
             "  /91tool_clear                清理过期缓存\n"
             "  /91tool_help                 显示本帮助\n\n"
-            "AI 可调用工具：91tool_query / video_info / prepare_video / "
+            "AI 工具：query / video_info / prepare_video / "
             "prepare_preview / render_list / send_media / cache_status"
         )
         yield event.plain_result(text)
