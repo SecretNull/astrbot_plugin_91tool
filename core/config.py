@@ -40,7 +40,6 @@ class QueryConfig:
 
         proxy_value = pick("proxy", str, "")
         return cls(
-            default_category=pick("91porn_category", str, cls.default_category),
             user_agent=pick("91porn_user_agent", str, cls.user_agent),
             timeout=pick("timeout", float, cls.timeout),
             proxy=proxy_value or None,
