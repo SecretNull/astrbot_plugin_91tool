@@ -115,14 +115,14 @@
   "image_max_bytes": {
     "description": "图片发送大小上限(字节)",
     "type": "int",
-    "default": 5242880,
-    "hint": "超过则拒绝发送；默认 5MB(各平台一致取 QQ 最严)；可用 /91probe 探测后调整"
+    "default": 9961472,
+    "hint": "超过则拒绝发送；默认 9.5MB(QQ 实测 10MB 硬限留余量，各平台一致)；可用 /91probe 探测后调整"
   },
   "video_max_bytes": {
     "description": "视频发送大小上限(字节)",
     "type": "int",
-    "default": 5242880,
-    "hint": "超过则拒绝发送；默认 5MB(各平台一致取 QQ 最严)；可用 /91probe 探测后调整"
+    "default": 9961472,
+    "hint": "超过则拒绝发送；默认 9.5MB(QQ 实测 10MB 硬限留余量，各平台一致)；可用 /91probe 探测后调整"
   },
   "default_send_level": {
     "description": "默认发送审核等级",

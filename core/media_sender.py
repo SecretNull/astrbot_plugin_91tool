@@ -26,8 +26,8 @@ ACTION_REJECT = "reject"
 class SendConfig:
     """发送策略的全局配置（单一，不分平台）。"""
 
-    image_max_bytes: int = 5 * 1024 * 1024
-    video_max_bytes: int = 5 * 1024 * 1024
+    image_max_bytes: int = 9961472  # 9.5MB，QQ 实测 10MB 硬限留 0.5MB 余量
+    video_max_bytes: int = 9961472  # 9.5MB
     default_level: str = LEVEL_MOSAIC_ONLY
 
     @classmethod
