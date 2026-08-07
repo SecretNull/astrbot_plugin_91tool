@@ -162,3 +162,27 @@ class RenderConfig:
             font_regular=pick("font_regular", str, ""),
             proxy=pick("proxy", str, "") or None,
         )
+
+
+@dataclass
+class CompressConfig:
+    """原片压缩的配置。"""
+
+    compress_timeout: float = 300.0
+
+    @classmethod
+    def from_mapping(cls, mapping: dict | None = None) -> "CompressConfig":
+        source = mapping or {}
+
+        def pick(key: str, cast, default):
+            value = source.get(key, default)
+            if value in (None, ""):
+                return default
+            try:
+                return cast(value)
+            except (TypeError, ValueError):
+                return default
+
+        return cls(
+            compress_timeout=pick("compress_timeout", float, cls.compress_timeout),
+        )

@@ -20,7 +20,8 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
-from .core.config import PreviewConfig, QueryConfig, RenderConfig, VideoConfig
+from .core.config import CompressConfig, PreviewConfig, QueryConfig, RenderConfig, VideoConfig
+from .core.compress_service import CompressService
 from .core.cookie_store import PersistentCookieJar
 from .core.list_fetcher import HttpListFetcher
 from .core.media_cache import MediaCache
@@ -60,6 +61,7 @@ class PluginStar(Star):
         self.render_config = RenderConfig.from_mapping(config)
         self.send_config = SendConfig.from_mapping(config)
         self.probe_config = ProbeConfig.from_mapping(config)
+        self.compress_config = CompressConfig.from_mapping(config)
         ttl_seconds = self.query_config.result_ttl_hours * 3600
         self.store = ResultStore(
             max_results=self.query_config.result_store_max,
@@ -75,6 +77,7 @@ class PluginStar(Star):
         self.preview_service: Optional[PreviewService] = None
         self.render_service: Optional[RenderService] = None
         self.send_service: Optional[SendService] = None
+        self.compress_service: Optional[CompressService] = None
         self.cleanup_task: Optional[asyncio.Task] = None
 
     async def initialize(self) -> None:
@@ -109,7 +112,12 @@ class PluginStar(Star):
         self.render_service = RenderService(
             self.query_service, self.http_client, self.render_config, self.video_dir
         )
-        self.send_service = SendService(self.media_cache, self.send_config)
+        self.compress_service = CompressService(
+            self.media_cache, self.video_dir, self.compress_config.compress_timeout
+        )
+        self.send_service = SendService(
+            self.media_cache, self.send_config, self.compress_service
+        )
         self.cleanup_task = asyncio.create_task(self._cleanup_loop())
         logger.info("astrbot_plugin_91tool 初始化完成")
 
@@ -310,7 +318,7 @@ class PluginStar(Star):
             "video_id": video_id, "asset": asset, "path": path,
             "uncensored": uncensored, "as_file": as_file,
         }
-        plan = send_media_tool.run_send_media(self.send_service, raw)
+        plan = await send_media_tool.run_send_media(self.send_service, raw)
         if plan["action"] == "reject":
             return f"未发送：{plan['reason']}"
         components = self._build_media_components(plan)

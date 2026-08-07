@@ -1,10 +1,11 @@
-"""发送服务：解析待发媒体路径并套用发送策略，产出 SendDecision。
+"""发送服务：解析待发媒体、套用发送策略，原片超限时自动压缩补救。
 
 发包动作（依赖 astrbot event）在 main 的 tool handler 里执行；本服务只决策。
 """
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 
 from .media_cache import (
     ASSET_GIF_CLEAN,
@@ -14,9 +15,8 @@ from .media_cache import (
     ASSET_PREVIEW_MOSAIC,
     MediaCache,
 )
-from .media_sender import SendConfig, SendDecision, decide
+from .media_sender import ACTION_REJECT, SendConfig, SendDecision, decide
 
-# send 用的 asset 名 → media_cache 产物常量
 _ASSET_TO_CACHE = {
     "original": ASSET_ORIGINAL,
     "preview_clean": ASSET_PREVIEW_CLEAN,
@@ -27,13 +27,14 @@ _ASSET_TO_CACHE = {
 
 
 class SendService:
-    """按 video_id+asset 或直接 path 解析文件，交 media_sender 决策。"""
+    """按 video_id+asset 或 path 解析文件并决策；original 超上限时压缩补救。"""
 
-    def __init__(self, media_cache: MediaCache, config: SendConfig):
+    def __init__(self, media_cache: MediaCache, config: SendConfig, compress_service=None):
         self.cache = media_cache
         self.config = config
+        self.compress = compress_service
 
-    def plan(
+    async def resolve_send(
         self,
         *,
         video_id: str | None = None,
@@ -42,47 +43,62 @@ class SendService:
         uncensored: bool = False,
         as_file: bool = False,
     ) -> SendDecision:
-        """解析路径并决策，返回 SendDecision（action=reject 时含 reason）。"""
+        """解析路径、决策；original 超过 video 上限时尝试压缩补救。"""
         resolved = self._resolve_path(video_id, asset, path)
         if isinstance(resolved, str):
-            return SendDecision(
-                action="reject",
-                kind="image",
-                asset=asset or "",
-                path="",
-                size_bytes=0,
-                effective_level=self.config.default_level,
-                as_file=as_file,
-                reason=resolved,
-            )
-
+            return self._reject(resolved, asset or "", "")
         file_path, asset_name = resolved
         if not os.path.exists(file_path):
-            return SendDecision(
-                action="reject",
-                kind="image",
-                asset=asset_name,
-                path=file_path,
-                size_bytes=0,
-                effective_level=self.config.default_level,
-                as_file=as_file,
-                reason=f"文件不存在：{file_path}",
-            )
-        size_bytes = os.path.getsize(file_path)
-        return decide(
+            return self._reject(f"文件不存在：{file_path}", asset_name, file_path)
+
+        decision = decide(
             asset=asset_name,
             path=file_path,
-            size_bytes=size_bytes,
+            size_bytes=os.path.getsize(file_path),
             uncensored=uncensored,
             as_file=as_file,
             config=self.config,
+        )
+        if (
+            decision.action == ACTION_REJECT
+            and asset_name == "original"
+            and decision.kind == "video"
+            and video_id
+            and "超过上限" in decision.reason
+            and self.compress is not None
+        ):
+            compressed = await self.compress.compress_original(
+                video_id, self.config.video_max_bytes
+            )
+            if compressed and os.path.exists(compressed):
+                remedied = decide(
+                    asset=asset_name,
+                    path=compressed,
+                    size_bytes=os.path.getsize(compressed),
+                    uncensored=uncensored,
+                    as_file=as_file,
+                    config=self.config,
+                )
+                if remedied.action != ACTION_REJECT:
+                    return replace(remedied, compressed=True)
+        return decision
+
+    def _reject(self, reason: str, asset: str, path: str) -> SendDecision:
+        return SendDecision(
+            action=ACTION_REJECT,
+            kind="image",
+            asset=asset,
+            path=path,
+            size_bytes=0,
+            effective_level=self.config.default_level,
+            as_file=False,
+            reason=reason,
         )
 
     def _resolve_path(self, video_id, asset, path):
         """返回 (path, asset_name) 或错误字符串。"""
         if path:
-            asset_name = asset or "render_image"
-            return path, asset_name
+            return path, asset or "render_image"
         if video_id and asset:
             cache_asset = _ASSET_TO_CACHE.get(asset)
             if cache_asset is None:

@@ -13,6 +13,7 @@ ASSET_PREVIEW_CLEAN = "preview_clean"
 ASSET_PREVIEW_MOSAIC = "preview_mosaic"
 ASSET_GIF_CLEAN = "gif_clean"
 ASSET_GIF_MOSAIC = "gif_mosaic"
+ASSET_ORIGINAL_COMPRESSED = "original_compressed"
 
 
 @dataclass

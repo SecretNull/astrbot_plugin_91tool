@@ -66,6 +66,7 @@ class SendDecision:
     effective_level: str
     as_file: bool
     reason: str = ""
+    compressed: bool = False
 
 
 def classify_kind(asset: str) -> str:
