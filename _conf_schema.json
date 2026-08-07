@@ -130,5 +130,23 @@
     "default": "mosaic_only",
     "options": ["mosaic_only", "uncensored"],
     "hint": "mosaic_only 默认只发打码版/长图；uncensored 放开无码。用户明确要无和谐时单次覆盖"
+  },
+  "font_regular": {
+    "description": "自定义中文字体路径",
+    "type": "string",
+    "default": "",
+    "hint": "留空用插件自带字体；填系统 ttf/ttc 绝对路径可覆盖长图字体"
+  },
+  "probe_sizes_mb": {
+    "description": "/91probe 探测档位(MB，逗号分隔)",
+    "type": "string",
+    "default": "1,3,5,8,10,15,20,30,50",
+    "hint": "三通道(image/video/file)探测的文件大小档位"
+  },
+  "compress_timeout": {
+    "description": "原片压缩超时(秒)",
+    "type": "float",
+    "default": 300.0,
+    "hint": "send_media 发原片超上限时自动压缩的最长运行时间"
   }
 }
