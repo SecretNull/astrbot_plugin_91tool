@@ -156,25 +156,20 @@ class PluginStar(Star):
 
     @filter.on_agent_done()
     async def emit_pending_media(self, event: AstrMessageEvent, *args, **kwargs):
-        """agent 结束时把 llm_tool 暂存的媒体发出。
+        """agent 结束时把 llm_tool 暂存的媒体逐条主动发到当前会话。
 
-        优先设 result_chain(被动回复场景)；定时任务等主动场景 response 没有
-        result_chain 时，退化为 context.send_message 主动发到当前会话。
+        每个媒体单独一条消息(QQ 等平台一条消息只收一个附件，合并会只发第一个)。
         """
         pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
         if not pending:
             return
         event.set_extra(LLM_TOOL_MEDIA_EXTRA, [])
-        response = next((arg for arg in args if hasattr(arg, "result_chain")), None)
-        if response is not None:
-            response.result_chain = MessageChain(chain=pending, type="llm_result")
-            return
-        try:
-            await self.context.send_message(
-                event.unified_msg_origin, MessageChain(chain=pending)
-            )
-        except Exception as exc:  # noqa: BLE001 主动发送失败不能影响 agent
-            logger.warning("待发媒体主动发送失败：%s", exc)
+        umo = event.unified_msg_origin
+        for component in pending:
+            try:
+                await self.context.send_message(umo, MessageChain(chain=[component]))
+            except Exception as exc:  # noqa: BLE001 单条失败不影响其余
+                logger.warning("媒体发送失败：%s", exc)
 
     # ---- LLM Tools ----
 
