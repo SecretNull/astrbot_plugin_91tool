@@ -295,15 +295,18 @@ class PluginStar(Star):
 
         if kind == "image":
             async def send(path: str, size_mb: int):
-                await self.context.send_message(umo, [Comp.Image.fromFileSystem(path)])
+                chain = MessageChain(chain=[Comp.Image.fromFileSystem(path)])
+                await self.context.send_message(umo, chain)
         elif kind == "video":
             async def send(path: str, size_mb: int):
-                await self.context.send_message(umo, [Comp.Video.fromFileSystem(path=path)])
+                chain = MessageChain(chain=[Comp.Video.fromFileSystem(path=path)])
+                await self.context.send_message(umo, chain)
         else:
             async def send(path: str, size_mb: int):
-                await self.context.send_message(
-                    umo, [Comp.File(file=path, name=os.path.basename(path))]
+                chain = MessageChain(
+                    chain=[Comp.File(file=path, name=os.path.basename(path))]
                 )
+                await self.context.send_message(umo, chain)
         return send
 
     @filter.command("91probe", alias={"探测"})

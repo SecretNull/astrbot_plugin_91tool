@@ -95,11 +95,11 @@ def generate_dummy_video(target_bytes: int, path: str, timeout: float = 30.0) ->
     if not ffmpeg:
         raise ProbeError("未安装 ffmpeg，无法生成测试视频")
     duration = 8
-    bitrate = max(200_000, int(target_bytes * 8 / duration))
+    bitrate = max(500_000, int(target_bytes * 8 / duration))
     args = [
         ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10",
-        "-t", str(duration), "-b:v", str(bitrate), "-an", path,
+        "-f", "lavfi", "-i", "testsrc=size=640x360:rate=30,noise=alls=100:allf=t",
+        "-t", str(duration), "-b:v", str(bitrate), "-pix_fmt", "yuv420p", "-an", path,
     ]
     try:
         completed = subprocess.run(args, capture_output=True, timeout=timeout)
