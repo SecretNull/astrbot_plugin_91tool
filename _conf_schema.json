@@ -69,8 +69,8 @@
   "preview_generation_timeout": {
     "description": "预览生成超时(秒)",
     "type": "float",
-    "default": 10.0,
-    "hint": "单次 FFmpeg 生成 MP4 或 GIF 的最长运行时间"
+    "default": 300.0,
+    "hint": "单次 FFmpeg 生成 MP4 或 GIF 的最长运行时间，默认 5 分钟"
   },
   "preview_gif_width": {
     "description": "GIF 预览最大宽度(像素)",

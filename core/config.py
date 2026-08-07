@@ -103,7 +103,7 @@ class PreviewConfig:
     """预览采样的配置。"""
 
     mosaic_block: int = 15
-    preview_generation_timeout: float = 10.0
+    preview_generation_timeout: float = 300.0
     preview_gif_width: int = 320
     preview_gif_fps: int = 6
 
