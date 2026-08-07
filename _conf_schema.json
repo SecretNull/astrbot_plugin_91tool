@@ -111,5 +111,24 @@
     "type": "string",
     "default": "",
     "hint": "如 http://127.0.0.1:7890；留空不使用代理"
+  },
+  "image_max_bytes": {
+    "description": "图片发送大小上限(字节)",
+    "type": "int",
+    "default": 10485760,
+    "hint": "超过则拒绝发送；可用 /91tool probe 探测各平台实际限制后调整"
+  },
+  "video_max_bytes": {
+    "description": "视频发送大小上限(字节)",
+    "type": "int",
+    "default": 104857600,
+    "hint": "超过则拒绝发送；可用 /91tool probe 探测各平台实际限制后调整"
+  },
+  "default_send_level": {
+    "description": "默认发送审核等级",
+    "type": "string",
+    "default": "mosaic_only",
+    "options": ["mosaic_only", "uncensored"],
+    "hint": "mosaic_only 默认只发打码版/长图；uncensored 放开无码。用户明确要无和谐时单次覆盖"
   }
 }

@@ -1,6 +1,7 @@
 """AstrBot 插件入口：注册 LLM Tool 与管理命令，装配 core 服务。
 
-阶段 1-5：query、video_info、prepare_video、prepare_preview、render_list。
+阶段 1-6：query、video_info、prepare_video、prepare_preview、render_list、
+send_media（唯一发包 tool，通过 on_agent_done 延迟发送）+ /91probe 探测命令。
 """
 from __future__ import annotations
 
@@ -9,25 +10,32 @@ import os
 from typing import Optional
 
 import aiohttp
+import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
 from .core.config import PreviewConfig, QueryConfig, RenderConfig, VideoConfig
 from .core.cookie_store import PersistentCookieJar
 from .core.list_fetcher import HttpListFetcher
 from .core.media_cache import MediaCache
+from .core.media_sender import SendConfig
 from .core.preview_service import PreviewService
+from .core.probe import ProbeConfig, format_report, probe_sizes
 from .core.query_service import QueryService
 from .core.render_service import RenderService
 from .core.result_store import ResultStore
+from .core.send_service import SendService
 from .core.video_registry import VideoRegistry
 from .core.video_service import VideoService
 from .tools import prepare_preview as prepare_preview_tool
 from .tools import prepare_video as prepare_video_tool
 from .tools import query as query_tool
 from .tools import render_list as render_list_tool
+from .tools import send_media as send_media_tool
 from .tools import video_info as video_info_tool
+
+LLM_TOOL_MEDIA_EXTRA = "astrbot_plugin_91tool.llm_tool_media"
 
 
 class PluginStar(Star):
@@ -44,6 +52,8 @@ class PluginStar(Star):
         self.video_config = VideoConfig.from_mapping(config)
         self.preview_config = PreviewConfig.from_mapping(config)
         self.render_config = RenderConfig.from_mapping(config)
+        self.send_config = SendConfig.from_mapping(config)
+        self.probe_config = ProbeConfig.from_mapping(config)
         ttl_seconds = self.query_config.result_ttl_hours * 3600
         self.store = ResultStore(
             max_results=self.query_config.result_store_max,
@@ -58,6 +68,7 @@ class PluginStar(Star):
         self.video_service: Optional[VideoService] = None
         self.preview_service: Optional[PreviewService] = None
         self.render_service: Optional[RenderService] = None
+        self.send_service: Optional[SendService] = None
 
     async def initialize(self) -> None:
         """初始化 HTTP 客户端与各服务。"""
@@ -81,22 +92,17 @@ class PluginStar(Star):
             fetcher, self.query_config, self.store, self.registry
         )
         self.video_service = VideoService(
-            self.http_client,
-            self.media_cache,
-            self.query_service,
-            self.video_config,
-            self.video_dir,
+            self.http_client, self.media_cache, self.query_service,
+            self.video_config, self.video_dir,
         )
         self.preview_service = PreviewService(
-            self.query_service,
-            self.video_service,
-            self.media_cache,
-            self.preview_config,
-            self.video_dir,
+            self.query_service, self.video_service, self.media_cache,
+            self.preview_config, self.video_dir,
         )
         self.render_service = RenderService(
             self.query_service, self.http_client, self.render_config, self.video_dir
         )
+        self.send_service = SendService(self.media_cache, self.send_config)
         logger.info("astrbot_plugin_91tool 初始化完成")
 
     async def terminate(self) -> None:
@@ -104,6 +110,26 @@ class PluginStar(Star):
         if self.http_client:
             await self.http_client.close()
         logger.info("astrbot_plugin_91tool 已关闭")
+
+    def _build_media_components(self, plan: dict) -> list:
+        """按决策把待发文件构造成 astrbot 消息组件。"""
+        path = plan["path"]
+        if plan["kind"] == "image":
+            return [Comp.Image.fromFileSystem(path)]
+        if plan["as_file"]:
+            return [Comp.File(file=path, name=os.path.basename(path))]
+        return [Comp.Video.fromFileSystem(path=path)]
+
+    @filter.on_agent_done()
+    async def emit_pending_media(self, event: AstrMessageEvent, response):
+        """agent 结束时把 llm_tool 暂存的媒体作为最终回复发出。"""
+        pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
+        if not pending:
+            return
+        event.set_extra(LLM_TOOL_MEDIA_EXTRA, [])
+        response.result_chain = MessageChain(chain=pending, type="llm_result")
+
+    # ---- LLM Tools ----
 
     @filter.llm_tool(name="91tool_query")
     async def query_videos(
@@ -143,11 +169,8 @@ class PluginStar(Star):
 
     @filter.llm_tool(name="91tool_video_info")
     async def video_info(
-        self,
-        event: AstrMessageEvent,
-        video_id: str = "",
-        result_id: str = "",
-        index: int = 0,
+        self, event: AstrMessageEvent,
+        video_id: str = "", result_id: str = "", index: int = 0,
     ):
         """查看单个视频的文字详情（不下载、不进详情页）。
 
@@ -165,11 +188,8 @@ class PluginStar(Star):
 
     @filter.llm_tool(name="91tool_prepare_video")
     async def prepare_video(
-        self,
-        event: AstrMessageEvent,
-        video_id: str = "",
-        result_id: str = "",
-        index: int = 0,
+        self, event: AstrMessageEvent,
+        video_id: str = "", result_id: str = "", index: int = 0,
     ):
         """可信校验下载原视频到本地缓存，返回路径与校验信息（不发送）。
 
@@ -187,13 +207,9 @@ class PluginStar(Star):
 
     @filter.llm_tool(name="91tool_prepare_preview")
     async def prepare_preview(
-        self,
-        event: AstrMessageEvent,
-        video_id: str = "",
-        result_id: str = "",
-        index: int = 0,
-        format: str = "mp4",
-        mosaic: str = "",
+        self, event: AstrMessageEvent,
+        video_id: str = "", result_id: str = "", index: int = 0,
+        format: str = "mp4", mosaic: str = "",
     ):
         """基于原视频生成 MP4 或 GIF 预览并缓存，返回路径（不发送）。
 
@@ -218,12 +234,8 @@ class PluginStar(Star):
 
     @filter.llm_tool(name="91tool_render_list")
     async def render_list(
-        self,
-        event: AstrMessageEvent,
-        result_id: str = "",
-        indices: str = "",
-        video_ids: str = "",
-        mosaic: str = "",
+        self, event: AstrMessageEvent,
+        result_id: str = "", indices: str = "", video_ids: str = "", mosaic: str = "",
     ):
         """把查询结果或选定条目渲染成单列长图，返回路径（不发送）。
 
@@ -242,3 +254,49 @@ class PluginStar(Star):
         except (ValueError, RuntimeError) as exc:
             return f"渲染失败：{exc}"
         return json.dumps(output, ensure_ascii=False)
+
+    @filter.llm_tool(name="91tool_send_media")
+    async def send_media(
+        self, event: AstrMessageEvent,
+        video_id: str = "", asset: str = "", path: str = "",
+        uncensored: str = "", as_file: str = "",
+    ):
+        """发送已准备的媒体到当前会话。
+
+        默认只发打码版；用户明确要无和谐时传 uncensored=true。视频默认视频消息，
+        as_file=true 时以文件形式发（Comp.File，部分平台不支持，可先 /91probe 探测）。
+
+        Args:
+            video_id(string): 视频 ID，配合 asset 定位产物
+            asset(string): 产物名 original/preview_clean/preview_mosaic/gif_clean/gif_mosaic
+            path(string): 直接指定文件路径，如 render_list 返回的 image_path
+            uncensored(string): "true" 发无码（用户明确要求时），留空走默认打码
+            as_file(string): "true" 视频以文件形式发，留空用视频消息
+        """
+        raw = {
+            "video_id": video_id, "asset": asset, "path": path,
+            "uncensored": uncensored, "as_file": as_file,
+        }
+        plan = send_media_tool.run_send_media(self.send_service, raw)
+        if plan["action"] == "reject":
+            return f"未发送：{plan['reason']}"
+        components = self._build_media_components(plan)
+        pending = event.get_extra(LLM_TOOL_MEDIA_EXTRA) or []
+        pending.extend(components)
+        event.set_extra(LLM_TOOL_MEDIA_EXTRA, pending)
+        size_mb = plan["size_bytes"] / (1024 * 1024)
+        return f"已加入待发：{plan['asset']}（{plan['kind']}，{size_mb:g}MB，agent 结束后发出）"
+
+    # ---- 管理命令 ----
+
+    @filter.command("91probe", alias={"探测"})
+    async def probe_command(self, event: AstrMessageEvent):
+        """探测当前会话所在平台的文件发送大小上限（会发出若干测试文件）。"""
+        sizes_mb = self.probe_config.sizes_mb
+
+        async def send_file(path: str, size_mb: int):
+            chain = [Comp.File(file=path, name=f"probe_{size_mb}mb.bin")]
+            await self.context.send_message(event.unified_msg_origin, chain)
+
+        report = await probe_sizes(send_file, self.video_dir, sizes_mb)
+        yield event.plain_result(format_report(report))
