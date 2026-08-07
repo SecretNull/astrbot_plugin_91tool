@@ -21,7 +21,7 @@ from .core.list_fetcher import HttpListFetcher
 from .core.media_cache import MediaCache
 from .core.media_sender import SendConfig
 from .core.preview_service import PreviewService
-from .core.probe import ProbeConfig, format_report, probe_sizes
+from .core.probe import ProbeConfig, format_reports, probe_channel
 from .core.query_service import QueryService
 from .core.render_service import RenderService
 from .core.result_store import ResultStore
@@ -289,14 +289,40 @@ class PluginStar(Star):
 
     # ---- 管理命令 ----
 
+    def _probe_sender(self, event: AstrMessageEvent, kind: str):
+        """构造指定通道的发送协程（image=Comp.Image / video=Comp.Video / file=Comp.File）。"""
+        umo = event.unified_msg_origin
+
+        if kind == "image":
+            async def send(path: str, size_mb: int):
+                await self.context.send_message(umo, [Comp.Image.fromFileSystem(path)])
+        elif kind == "video":
+            async def send(path: str, size_mb: int):
+                await self.context.send_message(umo, [Comp.Video.fromFileSystem(path=path)])
+        else:
+            async def send(path: str, size_mb: int):
+                await self.context.send_message(
+                    umo, [Comp.File(file=path, name=os.path.basename(path))]
+                )
+        return send
+
     @filter.command("91probe", alias={"探测"})
     async def probe_command(self, event: AstrMessageEvent):
-        """探测当前会话所在平台的文件发送大小上限（会发出若干测试文件）。"""
-        sizes_mb = self.probe_config.sizes_mb
+        """探测当前会话的媒体发送通道与大小上限。
 
-        async def send_file(path: str, size_mb: int):
-            chain = [Comp.File(file=path, name=f"probe_{size_mb}mb.bin")]
-            await self.context.send_message(event.unified_msg_origin, chain)
+        用法：/91probe [image|video|file|all]，默认 all。
+        会向当前会话发出若干测试文件，最后汇总各通道上限。
+        """
+        text = event.get_message_str() if hasattr(event, "get_message_str") else ""
+        tokens = (text or "").lower().split()
+        kind = next((t for t in tokens if t in ("image", "video", "file", "all")), "all")
+        kinds = [kind] if kind != "all" else ["image", "video", "file"]
 
-        report = await probe_sizes(send_file, self.video_dir, sizes_mb)
-        yield event.plain_result(format_report(report))
+        reports = []
+        for channel_kind in kinds:
+            send = self._probe_sender(event, channel_kind)
+            report = await probe_channel(
+                channel_kind, send, self.video_dir, self.probe_config.sizes_mb
+            )
+            reports.append(report)
+        yield event.plain_result(format_reports(reports))
