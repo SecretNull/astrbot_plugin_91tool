@@ -103,9 +103,9 @@ class PreviewConfig:
     """预览采样的配置。"""
 
     mosaic_block: int = 15
-    preview_generation_timeout: float = 5.0
-    preview_gif_width: int = 480
-    preview_gif_fps: int = 10
+    preview_generation_timeout: float = 10.0
+    preview_gif_width: int = 320
+    preview_gif_fps: int = 6
 
     @classmethod
     def from_mapping(cls, mapping: dict | None = None) -> "PreviewConfig":

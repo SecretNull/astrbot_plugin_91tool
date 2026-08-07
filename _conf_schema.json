@@ -69,18 +69,20 @@
   "preview_generation_timeout": {
     "description": "预览生成超时(秒)",
     "type": "float",
-    "default": 5.0,
+    "default": 10.0,
     "hint": "单次 FFmpeg 生成 MP4 或 GIF 的最长运行时间"
   },
   "preview_gif_width": {
     "description": "GIF 预览最大宽度(像素)",
     "type": "int",
-    "default": 480
+    "default": 320,
+    "hint": "GIF 无帧间压缩易偏大，宽度小一些控制体积"
   },
   "preview_gif_fps": {
     "description": "GIF 预览帧率",
     "type": "int",
-    "default": 10
+    "default": 6,
+    "hint": "帧率低则文件小；GIF 易超发送上限，必要时调更小"
   },
   "cookie_bootstrap_max_refreshes": {
     "description": "首次无 Cookie 请求后的最大刷新次数",
