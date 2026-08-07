@@ -10,17 +10,19 @@ class CompressError(RuntimeError):
     """视频压缩失败。"""
 
 
-def estimate_video_bitrate(target_bytes: int, duration: float, overhead_ratio: float = 0.82) -> int:
-    """按目标大小与时长估算视频码率，留余量给音频与容器开销。
+def estimate_video_bitrate(
+    target_bytes: int, duration: float, audio_bitrate: int = 48_000, overhead_ratio: float = 0.95
+) -> int:
+    """按目标大小、时长、音频码率估算视频码率。
 
-    @param target_bytes 目标文件字节数。
-    @param duration 视频时长(秒)。
-    @param overhead_ratio 码率折扣，给 aac 音频与 mp4 容器留余量。
-    @return 视频码率(bps)，最低 200kbps 保证可编码。
+    从目标总码率(target*8/duration)扣除音频码率后打折扣，给 mp4 容器开销留余量。
+    @return 视频码率(bps)，最低 100kbps 保证可编码。
     """
     if duration <= 0:
         raise ValueError("duration 必须大于 0")
-    return max(200_000, int(target_bytes * overhead_ratio * 8 / duration))
+    total_bitrate = target_bytes * 8 / duration
+    video_bitrate = (total_bitrate - audio_bitrate) * overhead_ratio
+    return max(100_000, int(video_bitrate))
 
 
 def compress_video(

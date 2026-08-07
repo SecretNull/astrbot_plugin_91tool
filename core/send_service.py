@@ -67,7 +67,7 @@ class SendService:
             and "超过上限" in decision.reason
             and self.compress is not None
         ):
-            compressed = await self.compress.compress_original(
+            compressed, comp_reason = await self.compress.compress_original(
                 video_id, self.config.video_max_bytes
             )
             if compressed and os.path.exists(compressed):
@@ -81,6 +81,10 @@ class SendService:
                 )
                 if remedied.action != ACTION_REJECT:
                     return replace(remedied, compressed=True)
+            return replace(
+                decision,
+                reason=f"原片超上限，压缩未成功：{comp_reason}；建议改发预览(preview_mosaic/gif_mosaic)",
+            )
         return decision
 
     def _reject(self, reason: str, asset: str, path: str) -> SendDecision:

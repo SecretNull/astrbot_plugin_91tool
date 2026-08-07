@@ -1,4 +1,4 @@
-"""compress 模块测试：码率估算、2-pass 调用、压缩服务缓存与失败处理。"""
+"""compress 模块测试：码率估算(扣音频)、2-pass 调用、压缩服务缓存与失败原因。"""
 import os
 from pathlib import Path
 
@@ -21,7 +21,7 @@ def test_estimate_video_bitrate_scales_with_target():
 
 
 def test_estimate_video_bitrate_minimum_floor():
-    assert compress.estimate_video_bitrate(1024, duration=600.0) == 200_000
+    assert compress.estimate_video_bitrate(1024, duration=600.0) == 100_000
 
 
 def test_estimate_video_bitrate_invalid_duration():
@@ -34,7 +34,7 @@ def test_compress_video_runs_two_passes(tmp_path, monkeypatch):
 
     def fake_run(args, capture_output=True, timeout=None):
         calls.append(args)
-        if args[-1] != "-" :  # pass 2 真写输出文件
+        if args[-1] != "-":  # pass 2 真写输出文件
             Path(args[-1]).write_bytes(b"mp4")
         return type("R", (), {"returncode": 0, "stderr": b""})()
 
@@ -67,9 +67,10 @@ async def test_compress_service_uses_cache(tmp_path):
     cached_path.write_bytes(b"compressed")
     cache.replace("v1", {ASSET_ORIGINAL_COMPRESSED: str(cached_path)})
 
-    service = CompressService(cache, str(tmp_path))
-    result = await service.compress_original("v1", target_bytes=10 * 1024 * 1024)
-    assert result == str(cached_path)
+    path, reason = await CompressService(cache, str(tmp_path)).compress_original(
+        "v1", target_bytes=10 * 1024 * 1024
+    )
+    assert path == str(cached_path)
 
 
 async def test_compress_service_compresses_original(tmp_path, monkeypatch):
@@ -87,17 +88,39 @@ async def test_compress_service_compresses_original(tmp_path, monkeypatch):
     monkeypatch.setattr(video_source, "probe_video", fake_probe)
     monkeypatch.setattr(compress, "compress_video", fake_compress)
 
-    service = CompressService(cache, str(tmp_path))
-    result = await service.compress_original("v1", target_bytes=5 * 1024 * 1024)
-    assert result is not None
-    assert os.path.exists(result)
-    assert cache.get_asset("v1", ASSET_ORIGINAL_COMPRESSED) == result
+    path, reason = await CompressService(cache, str(tmp_path)).compress_original(
+        "v1", target_bytes=5 * 1024 * 1024
+    )
+    assert path is not None
+    assert os.path.exists(path)
+    assert cache.get_asset("v1", ASSET_ORIGINAL_COMPRESSED) == path
+
+
+async def test_compress_service_rejects_overlong(tmp_path, monkeypatch):
+    cache = MediaCache(str(tmp_path), retention_hours=24)
+    original = tmp_path / "orig.mp4"
+    original.write_bytes(b"big")
+    cache.replace("v1", {ASSET_ORIGINAL: str(original)})
+
+    async def fake_probe(path):
+        # 30 分钟原片压到 9.5MB 总码率不足
+        return video_source.VideoProbe(1800.0, 1280, 720, "h264", "aac")
+
+    monkeypatch.setattr(video_source, "probe_video", fake_probe)
+    path, reason = await CompressService(cache, str(tmp_path)).compress_original(
+        "v1", target_bytes=9961472
+    )
+    assert path is None
+    assert "过长" in reason
 
 
 async def test_compress_service_returns_none_without_original(tmp_path):
     cache = MediaCache(str(tmp_path), retention_hours=24)
-    service = CompressService(cache, str(tmp_path))
-    assert await service.compress_original("v1", target_bytes=1024) is None
+    path, reason = await CompressService(cache, str(tmp_path)).compress_original(
+        "v1", target_bytes=1024
+    )
+    assert path is None
+    assert "未就绪" in reason
 
 
 async def test_compress_service_returns_none_when_over_target(tmp_path, monkeypatch):
@@ -115,5 +138,8 @@ async def test_compress_service_returns_none_when_over_target(tmp_path, monkeypa
     monkeypatch.setattr(video_source, "probe_video", fake_probe)
     monkeypatch.setattr(compress, "compress_video", fake_compress)
 
-    service = CompressService(cache, str(tmp_path))
-    assert await service.compress_original("v1", target_bytes=1024) is None
+    path, reason = await CompressService(cache, str(tmp_path)).compress_original(
+        "v1", target_bytes=5 * 1024 * 1024
+    )
+    assert path is None
+    assert "仍超过" in reason

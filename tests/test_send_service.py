@@ -15,7 +15,7 @@ class FakeCompress:
 
     async def compress_original(self, video_id, target_bytes):
         self.calls.append((video_id, target_bytes))
-        return self.return_value
+        return self.return_value, "fake reason"
 
 
 def _put_original(tmp_path, cache, size):
