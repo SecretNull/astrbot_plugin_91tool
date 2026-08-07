@@ -116,7 +116,7 @@ class MediaCache:
         for video_id in expired:
             self._bundles.pop(video_id, None)
 
-        for pattern in ("*.mp4", "*.gif"):
+        for pattern in ("*.mp4", "*.gif", "*.jpg"):
             for path in self.video_dir.glob(pattern):
                 path_value = str(path)
                 if path_value in retained or path_value in removed:
