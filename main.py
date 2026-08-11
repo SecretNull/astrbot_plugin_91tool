@@ -202,6 +202,13 @@ class PluginStar(Star):
         列表展示首选：拿到结果后用 list_image 一步发长图，或 render_list + send_media。
         不要逐条文字罗列给用户。只有用户明确要"具体链接/某条详情"时才用文字或 video_info。
 
+        翻页策略(重要，必须遵守)：
+        - 每页约 24 条。
+        - 用户明确要 N 条(N>24)：从 page=1 起逐页 query(page=1,2,3...)累积到 N 条，不要跳页。
+        - 用户没明确数量或翻页意图(如只说"看热门"/"看数字站")：只取 page=1 一页，绝不主动翻页。
+        - 到底判断：某页 returned 明显变少(少于 24)或为 0，即到底，停止翻页。
+        - 上限：一般不超过 5 页(约 100 条)，除非用户明确要更多。
+
         Args:
             category(string): 分类 rf=最近加精 hot=最热 top=本月最热 monthly_top=每月最热 ori=原创 tf=本月收藏 mf=收藏最多 md=本月讨论 hd=高清 long=≥10分钟 longer=≥20分钟；用户没指定时先问要哪个分类，不要自作主张选默认，留空用默认分类
             keyword(string): 搜索关键词，非空时按搜索结果返回
@@ -362,6 +369,9 @@ class PluginStar(Star):
 
         渲染整页全部条目(有多少渲染多少)。除非用户明确要"具体链接/某条详情"，
         列表浏览都用本工具发长图，不要文字罗列。返回 result_id 供后续 video_info/prepare。
+
+        翻页策略：用户没明确数量/翻页(如只说"看热门")只发 page=1 一页长图，绝不主动翻；
+        用户明确要 N 条(N>24)才逐页 list_image(page=1,2,...)累积；每页约 24 条，上限约 5 页。
 
         Args:
             category(string): 分类 rf=最近加精 hot=最热 top=本月最热 monthly_top=每月最热 ori=原创 tf=本月收藏 mf=收藏最多 md=本月讨论 hd=高清 long=≥10分钟 longer=≥20分钟；用户没指定时先问要哪个分类，不要自作主张选默认
