@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from dataclasses import replace
 
 from . import longimage
 from .config import RenderConfig
@@ -45,6 +46,9 @@ class RenderService:
                 "ready": False,
                 "error": "没有可渲染的条目，请确认 result_id/indices 或 video_ids",
             }
+        if video_ids:
+            # 跨 result 合并/选定子集：序号重排为连续 1..N，每张长图自洽
+            items = [replace(it, index=i + 1) for i, it in enumerate(items)]
 
         block = 1 if mosaic is False else self.config.mosaic_block
         out_path = os.path.join(self.video_dir, f"render_{uuid.uuid4().hex[:8]}.jpg")
@@ -61,7 +65,6 @@ class RenderService:
             "width": self.config.longimage_width,
             "item_count": len(items),
             "mosaic_applied": block > 1,
-            "indices": [it.index for it in items],
             "video_ids": [it.video_id for it in items],
         }
 

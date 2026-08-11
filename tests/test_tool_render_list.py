@@ -64,7 +64,7 @@ async def test_render_subset_by_indices(
     )
     assert out["item_count"] == 1
     assert captured["items"][0].video_id == "2"
-    assert out["indices"] == [2]
+    assert out["video_ids"] == ["2"]
 
 
 async def test_render_no_mosaic(
@@ -93,6 +93,7 @@ async def test_render_by_video_ids(
     )
     assert out["item_count"] == 2
     assert [it.video_id for it in captured["items"]] == ["1", "3"]
+    assert [it.index for it in captured["items"]] == [1, 2]  # video_ids 模式重排连续
 
 
 async def test_render_result_not_found(clock, make_rec, fetcher_factory, tmp_path):
@@ -125,4 +126,4 @@ async def test_run_render_list_tool(
     )
     assert out["ready"] is True
     assert out["item_count"] == 2
-    assert out["indices"] == [1, 3]
+    assert out["video_ids"] == ["1", "3"]
