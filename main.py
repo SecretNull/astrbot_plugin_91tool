@@ -204,7 +204,8 @@ class PluginStar(Star):
 
         翻页策略(重要，必须遵守)：
         - 每页约 24 条。
-        - 用户明确要 N 条(N>24)：从 page=1 起逐页 query(page=1,2,3...)累积到 N 条，不要跳页。
+        - 用户明确要 N 条(N>24)：从 page=1 起逐页 query(page=1,2,3...)收集 video_id 累积到 N；
+          要长图时用 render_list(video_ids=收集到的id) 合并成【一张】长图，不要每页各发一张。
         - 用户没明确数量或翻页意图(如只说"看热门"/"看数字站")：只取 page=1 一页，绝不主动翻页。
         - 到底判断：某页 returned 明显变少(少于 24)或为 0，即到底，停止翻页。
         - 上限：一般不超过 5 页(约 100 条)，除非用户明确要更多。
@@ -333,6 +334,8 @@ class PluginStar(Star):
         """把查询结果或选定条目渲染成单列长图——列表发给用户的主要形式。
 
         渲染后用 send_media(path=image_path) 发出。列表浏览也可直接用 list_image 一步完成。
+        video_ids 可跨多个 result 合并：翻页收集 video_id 后用本参数一次渲染成【一张】长图
+        (如"前50条"→翻3页收集50个 id→render_list(video_ids=...) 出一张，而非每页一张)。
 
         Args:
             result_id(string): 来自 query 的结果 ID
