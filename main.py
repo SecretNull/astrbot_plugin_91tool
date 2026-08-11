@@ -20,7 +20,8 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
-from .core.config import CompressConfig, PreviewConfig, QueryConfig, RenderConfig, VideoConfig
+from .core.archive_service import ArchiveService
+from .core.config import ArchiveConfig, CompressConfig, PreviewConfig, QueryConfig, RenderConfig, VideoConfig
 from .core.compress_service import CompressService
 from .core.cookie_store import PersistentCookieJar
 from .core.list_fetcher import HttpListFetcher
@@ -62,6 +63,7 @@ class PluginStar(Star):
         self.send_config = SendConfig.from_mapping(config)
         self.probe_config = ProbeConfig.from_mapping(config)
         self.compress_config = CompressConfig.from_mapping(config)
+        self.archive_config = ArchiveConfig.from_mapping(config)
         ttl_seconds = self.query_config.result_ttl_hours * 3600
         self.store = ResultStore(
             max_results=self.query_config.result_store_max,
@@ -78,6 +80,7 @@ class PluginStar(Star):
         self.render_service: Optional[RenderService] = None
         self.send_service: Optional[SendService] = None
         self.compress_service: Optional[CompressService] = None
+        self.archive_service: Optional[ArchiveService] = None
         self.cleanup_task: Optional[asyncio.Task] = None
 
     async def initialize(self) -> None:
@@ -101,13 +104,18 @@ class PluginStar(Star):
         self.query_service = QueryService(
             fetcher, self.query_config, self.store, self.registry
         )
+        self.archive_service = ArchiveService(
+            self.http_client,
+            self.archive_config.archive_dir,
+            self.archive_config.archive_enabled,
+        )
         self.video_service = VideoService(
             self.http_client, self.media_cache, self.query_service,
-            self.video_config, self.video_dir,
+            self.video_config, self.video_dir, self.archive_service,
         )
         self.preview_service = PreviewService(
             self.query_service, self.video_service, self.media_cache,
-            self.preview_config, self.video_dir,
+            self.preview_config, self.video_dir, self.archive_service,
         )
         self.render_service = RenderService(
             self.query_service, self.http_client, self.render_config, self.video_dir
@@ -252,6 +260,36 @@ class PluginStar(Star):
         except (ValueError, RuntimeError) as exc:
             return f"准备失败：{exc}"
         return json.dumps(output, ensure_ascii=False)
+
+    @filter.llm_tool(name="91tool_archive")
+    async def archive_video(
+        self, event: AstrMessageEvent,
+        video_id: str = "", result_id: str = "", index: int = 0,
+    ):
+        """爬取原片并归档到 NAS(持久保存)，不发送消息。用户说"帮我爬/保存某条"时用。
+
+        Args:
+            video_id(string): 视频 ID，优先使用
+            result_id(string): 配合 index 使用
+            index(number): 在 result_id 结果中的 1-based 序号
+        """
+        if video_id:
+            item = self.query_service.find_by_video_id(video_id)
+        elif result_id and index:
+            item = self.query_service.find_item(result_id, index)
+        else:
+            return "请提供 video_id 或 (result_id, index) 定位"
+        if item is None:
+            return "找不到对应视频"
+        if not item.source_id or not item.source_id.isdigit():
+            return f"该视频缺少可信 source_id，无法爬取：{item.title}"
+        out = await prepare_video_tool.run_prepare_video(
+            self.video_service, {"video_id": item.video_id}
+        )
+        if not out.get("ready"):
+            return f"爬取失败：{out.get('error')}"
+        where = "已归档到 NAS" if self.archive_config.archive_enabled else "(归档未启用，仅下载到本地缓存)"
+        return f"已爬取：{item.title}（{item.duration_text}）。{where}"
 
     @filter.llm_tool(name="91tool_prepare_preview")
     async def prepare_preview(

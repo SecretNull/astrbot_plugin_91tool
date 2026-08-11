@@ -23,12 +23,14 @@ class VideoService:
         query_service: QueryService,
         config: VideoConfig,
         video_dir: str,
+        archive=None,
     ):
         self.http_client = http_client
         self.cache = media_cache
         self.query = query_service
         self.config = config
         self.video_dir = video_dir
+        self.archive = archive
 
     async def prepare(self, *, video_id=None, result_id=None, index=None) -> dict:
         """准备原视频，返回结构化结果。
@@ -101,6 +103,11 @@ class VideoService:
             proxy=self.config.proxy,
         )
         self.cache.replace(item.video_id, {ASSET_ORIGINAL: output_path})
+        if self.archive is not None:
+            try:
+                await self.archive.archive_original(item, output_path)
+            except Exception:
+                pass
         return output_path, probe, source.refreshes
 
     def _resolve(self, video_id, result_id, index):

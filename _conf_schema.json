@@ -143,5 +143,17 @@
     "type": "float",
     "default": 300.0,
     "hint": "send_media 发原片超上限时自动压缩的最长运行时间"
+  },
+  "archive_enabled": {
+    "description": "是否启用持久归档(存到 NAS)",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后原片下载成功自动归档；无码预览生成也归档；打码预览不归档"
+  },
+  "archive_dir": {
+    "description": "归档目录(建议映射 NAS)",
+    "type": "string",
+    "default": "/archive/91",
+    "hint": "容器内路径，docker -v 映射宿主 NAS；按 日期/标题_video_id/ 组织，无则自动创建"
   }
 }

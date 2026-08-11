@@ -185,3 +185,34 @@ class CompressConfig:
         return cls(
             compress_timeout=pick("compress_timeout", float, cls.compress_timeout),
         )
+
+
+@dataclass
+class ArchiveConfig:
+    """持久归档(NAS)的配置。"""
+
+    archive_enabled: bool = False
+    archive_dir: str = "/archive/91"
+
+    @classmethod
+    def from_mapping(cls, mapping: dict | None = None) -> "ArchiveConfig":
+        source = mapping or {}
+
+        def pick(key: str, cast, default):
+            value = source.get(key, default)
+            if value in (None, ""):
+                return default
+            try:
+                return cast(value)
+            except (TypeError, ValueError):
+                return default
+
+        def parse_bool(value):
+            if isinstance(value, bool):
+                return value
+            return str(value).strip().lower() in ("true", "1", "yes")
+
+        return cls(
+            archive_enabled=pick("archive_enabled", parse_bool, cls.archive_enabled),
+            archive_dir=pick("archive_dir", str, cls.archive_dir),
+        )

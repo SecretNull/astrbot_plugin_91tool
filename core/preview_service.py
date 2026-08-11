@@ -38,12 +38,14 @@ class PreviewService:
         media_cache: MediaCache,
         config: PreviewConfig,
         video_dir: str,
+        archive=None,
     ):
         self.query = query_service
         self.video = video_service
         self.cache = media_cache
         self.config = config
         self.video_dir = video_dir
+        self.archive = archive
 
     async def prepare_preview(
         self,
@@ -103,6 +105,13 @@ class PreviewService:
                     "error": f"预览生成失败：{exc}",
                 }
             self.cache.add_assets(item.video_id, assets)
+            if self.archive is not None and not mosaic:
+                target = "gif_clean" if fmt == "gif" else "preview_clean"
+                if target in assets:
+                    try:
+                        await self.archive.archive_preview(item, assets[target], target)
+                    except Exception:
+                        pass
             return self._build(item, assets[asset_name], fmt, mosaic, cached=False)
 
     async def _generate(self, video_id, original, asset_name) -> dict:

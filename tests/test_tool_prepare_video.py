@@ -109,3 +109,28 @@ async def test_run_prepare_video_tool(clock, make_rec, fetcher_factory, tmp_path
     service = VideoService(object(), cache, qs, VideoConfig(), str(tmp_path))
     out = await prep_tool.run_prepare_video(service, {"video_id": "1001"})
     assert out["ready"] is True
+
+
+class FakeArchive:
+    def __init__(self):
+        self.original_calls = []
+        self.preview_calls = []
+
+    async def archive_original(self, item, src_path):
+        self.original_calls.append((item.video_id, src_path))
+
+    async def archive_preview(self, item, src_path, asset_name):
+        self.preview_calls.append((item.video_id, asset_name))
+
+
+async def test_prepare_video_archives_original(clock, make_rec, fetcher_factory, tmp_path, monkeypatch):
+    qs, cache = _setup(clock, make_rec, fetcher_factory, tmp_path)
+    await qs.query()
+    _patch_video_source(monkeypatch)
+    archive = FakeArchive()
+
+    service = VideoService(object(), cache, qs, VideoConfig(), str(tmp_path), archive)
+    out = await service.prepare(video_id="1001")
+    assert out["ready"] is True
+    assert len(archive.original_calls) == 1
+    assert archive.original_calls[0][0] == "1001"
